@@ -91,6 +91,7 @@ function apiMiddleware() {
 }
 
 export default defineConfig({
+  base: process.env.VITE_BASE || '/',
   plugins: [
     react(),
     apiMiddleware(),
