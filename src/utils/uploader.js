@@ -18,12 +18,23 @@ export async function uploadToOSS(blob, fileName, prefix = 'photos', onProgress)
   } catch (error) {
     const ext = fileName.split('.').pop() || 'bin';
     const localKey = `${prefix}/${generateId()}.${ext}`;
-    await saveBlob(localKey, blob);
-    return {
-      url: await blobToDataUrl(blob),
-      key: localKey,
-      storageMode: 'local',
-    };
+    let localUrl;
+    try {
+      await saveBlob(localKey, blob);
+      localUrl = await blobToDataUrl(blob);
+      return {
+        url: localUrl,
+        key: localKey,
+        storageMode: 'local',
+      };
+    } catch (saveError) {
+      localUrl = await blobToDataUrl(blob);
+      return {
+        url: localUrl,
+        key: null,
+        storageMode: 'local',
+      };
+    }
   }
 }
 

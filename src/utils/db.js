@@ -137,17 +137,32 @@ export async function clearAllData() {
   await promisify(tx(db, 'blobs', 'readwrite').clear());
 }
 
+async function readBlobData(blob) {
+  if (blob.arrayBuffer) {
+    return blob.arrayBuffer();
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
 export async function saveBlob(id, blob) {
   const db = await openDB();
   const store = tx(db, 'blobs', 'readwrite');
-  return promisify(store.put({ id, blob }));
+  const data = await readBlobData(blob);
+  return promisify(store.put({ id, type: blob.type, data }));
 }
 
 export async function getBlob(id) {
   const db = await openDB();
   const store = tx(db, 'blobs');
   const result = await promisify(store.get(id));
-  return result?.blob || null;
+  if (!result?.data) return null;
+  return new Blob([result.data], { type: result.type });
 }
 
 export async function deleteBlob(id) {
