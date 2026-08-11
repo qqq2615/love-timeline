@@ -62,14 +62,28 @@ function getBackupKey(username, id) {
 }
 
 // Users storage
+const USERS_STORAGE = process.env.USERS_STORAGE || 'local';
+const USERS_KEY = process.env.USERS_KEY || 'system/users.json';
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
-if (!fs.existsSync(DATA_DIR)) {
+if (USERS_STORAGE === 'local' && !fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function loadUsers() {
+async function loadUsers() {
+  if (USERS_STORAGE === 'oss') {
+    try {
+      const result = await getOSSClient().get(USERS_KEY);
+      return JSON.parse(result.content.toString('utf8')) || {};
+    } catch (error) {
+      if (error.name === 'NoSuchKeyError' || error.code === 'NoSuchKey') {
+        return {};
+      }
+      throw error;
+    }
+  }
+
   if (!fs.existsSync(USERS_FILE)) return {};
   try {
     return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) || {};
@@ -77,7 +91,17 @@ function loadUsers() {
     return {};
   }
 }
-function saveUsers(users) {
+
+async function saveUsers(users) {
+  if (USERS_STORAGE === 'oss') {
+    await getOSSClient().put(
+      USERS_KEY,
+      Buffer.from(JSON.stringify(users, null, 2), 'utf8'),
+      { headers: { 'Content-Type': 'application/json' } },
+    );
+    return;
+  }
+
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
 }
 
@@ -105,11 +129,11 @@ app.post('/api/register', async (req, res) => {
   try {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
-    const users = loadUsers();
+    const users = await loadUsers();
     if (users[username]) return res.status(409).json({ error: 'Username exists' });
     const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     users[username] = { username, hash, createdAt: Date.now() };
-    saveUsers(users);
+    await saveUsers(users);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -120,7 +144,7 @@ app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
-    const users = loadUsers();
+    const users = await loadUsers();
     const u = users[username];
     if (!u) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(password, u.hash);
