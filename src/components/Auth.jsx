@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { register, login } from '../utils/auth';
+import { login } from '../utils/auth';
 
 export default function Auth({ onClose, onAuthenticated, fullScreen = false }) {
-  const [mode, setMode] = useState('login');
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -12,15 +10,7 @@ export default function Auth({ onClose, onAuthenticated, fullScreen = false }) {
 
     try {
       setError('');
-
-      if (mode === 'register') {
-        await register(username, password);
-        alert('注册成功，请登录');
-        setMode('login');
-        return;
-      }
-
-      await login(username, password);
+      await login(password);
       if (onAuthenticated) onAuthenticated();
       if (onClose) onClose();
     } catch (err) {
@@ -32,25 +22,18 @@ export default function Auth({ onClose, onAuthenticated, fullScreen = false }) {
     <div className={fullScreen ? 'auth-card auth-card-full' : 'modal-card auth-card'}>
       <div className="auth-header">
         <div className="setup-heart">💕</div>
-        <h1 className="setup-title">{mode === 'login' ? '先登录，再开始记录' : '先注册，再创建你们的时间线'}</h1>
+        <h1 className="setup-title">先登录，再开始记录</h1>
         <p className="setup-desc">
-          {mode === 'login'
-            ? '登录后就可以继续设置纪念日、上传照片和同步回忆。'
-            : '注册一个账号后，再进入纪念日设置和后续的时间线管理。'}
+          这个站点现在使用共享空间模式。
+          输入你们约定好的空间密码后，就可以继续设置纪念日、上传照片和同步数据。
         </p>
       </div>
 
       <form className="auth-form" onSubmit={submit}>
         <input
-          className="setup-input"
-          placeholder="用户名"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-        />
-        <input
           type="password"
           className="setup-input"
-          placeholder="密码"
+          placeholder="共享空间密码"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
@@ -58,15 +41,7 @@ export default function Auth({ onClose, onAuthenticated, fullScreen = false }) {
         {error && <p className="form-error">{error}</p>}
 
         <button className="setup-btn" type="submit">
-          {mode === 'login' ? '登录' : '注册'}
-        </button>
-
-        <button
-          type="button"
-          className="auth-switch-btn"
-          onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-        >
-          {mode === 'login' ? '还没有账号？去注册' : '已有账号？去登录'}
+          进入时间线
         </button>
 
         {!fullScreen && (

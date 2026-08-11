@@ -1,14 +1,14 @@
 {
   "name": "恋爱时光轴",
   "short_name": "Love Timeline",
-  "description": "记录我们一起的每一段回忆",
-  "start_url": "/",
+  "description": "记录我们在一起的每一段回忆",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#fff8fb",
   "theme_color": "#ff6b8a",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

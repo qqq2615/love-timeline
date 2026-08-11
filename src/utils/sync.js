@@ -1,5 +1,5 @@
 import { exportAllData, importAllData } from './db';
-import { getToken, getUsername } from './auth';
+import { getSpaceLabel, getToken } from './auth';
 import { API_BASE } from './config';
 
 const metaKey = 'love-timeline-sync-meta';
@@ -144,5 +144,5 @@ export async function resolveSyncConflict() {
 }
 
 export async function getCurrentSyncUser() {
-  return getUsername();
+  return getSpaceLabel();
 }

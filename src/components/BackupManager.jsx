@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { listBackups, downloadAndDecryptBackup, deleteBackup } from '../utils/backup';
 import { importAllData } from '../utils/db';
-import { getUsername, getToken } from '../utils/auth';
+import { getToken } from '../utils/auth';
 
 function fmtDate(ms) {
-  try { return new Date(ms).toLocaleString(); } catch { return '' }
+  try {
+    return new Date(ms).toLocaleString();
+  } catch {
+    return '';
+  }
 }
 
 export default function BackupManager({ onClose, onRestored }) {
@@ -18,8 +22,8 @@ export default function BackupManager({ onClose, onRestored }) {
         if (!getToken()) {
           throw new Error('请先登录后再管理云备份');
         }
-        const l = await listBackups();
-        setList(l.sort((a,b)=>b.createdAt - a.createdAt));
+        const backups = await listBackups();
+        setList(backups.sort((a, b) => b.createdAt - a.createdAt));
       } catch (err) {
         setError(err.message || '获取失败');
       } finally {
@@ -29,29 +33,43 @@ export default function BackupManager({ onClose, onRestored }) {
   }, []);
 
   const handleRestore = async (id) => {
-    const pwd = prompt('请输入用于解密的密码：', '');
-    if (!pwd) return alert('需要密码以解密备份');
+    const password = prompt('请输入备份口令：', '');
+    if (!password) {
+      alert('需要输入备份口令才能解密备份');
+      return;
+    }
+
     try {
-      const username = getUsername() || '';
-      const data = await downloadAndDecryptBackup(id, username, pwd);
-      if (!data) return alert('解密后无数据');
+      const data = await downloadAndDecryptBackup(id, password);
+      if (!data) {
+        alert('解密后没有有效数据');
+        return;
+      }
+
       await importAllData(data);
-      onRestored && onRestored(data);
+      if (onRestored) {
+        onRestored(data);
+      }
       alert('恢复完成');
-      onClose && onClose();
+      if (onClose) {
+        onClose();
+      }
     } catch (err) {
-      alert('恢复失败：' + err.message);
+      alert(`恢复失败：${err.message}`);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('确定要删除此备份吗？此操作不可恢复。')) return;
+    if (!confirm('确定要删除这个备份吗？此操作不可恢复。')) {
+      return;
+    }
+
     try {
       await deleteBackup(id);
       setList((prev) => prev.filter((item) => item.id !== id));
       alert('备份已删除');
     } catch (err) {
-      alert('删除失败：' + err.message);
+      alert(`删除失败：${err.message}`);
     }
   };
 
@@ -59,12 +77,14 @@ export default function BackupManager({ onClose, onRestored }) {
     <div className="modal-backdrop">
       <div className="modal-card">
         <h3>云备份管理</h3>
-        {loading ? <p>加载中...</p> : (
+        {loading ? (
+          <p>加载中...</p>
+        ) : (
           <div style={{ maxHeight: 360, overflow: 'auto' }}>
             {error && <p className="form-error">{error}</p>}
-            {list.length === 0 && <p>没有备份</p>}
+            {list.length === 0 && <p>还没有云备份</p>}
             <ul>
-              {list.map(item => (
+              {list.map((item) => (
                 <li key={item.id} style={{ marginBottom: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>

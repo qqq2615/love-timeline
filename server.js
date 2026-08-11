@@ -6,13 +6,33 @@ import { createHmac, randomBytes } from 'crypto';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import OSS from 'ali-oss';
-import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const DEFAULT_OSS_REGION = 'oss-cn-shenzhen';
+const DEFAULT_OSS_BUCKET = 'love-timeline';
+const DEFAULT_SPACE_ID = 'our-love-space';
+const DEFAULT_SPACE_LABEL = 'Our Love Space';
+
+const OSS_REGION = process.env.OSS_REGION || DEFAULT_OSS_REGION;
+const OSS_BUCKET = process.env.OSS_BUCKET || DEFAULT_OSS_BUCKET;
+const OSS_ACCESS_KEY_ID = process.env.OSS_ACCESS_KEY_ID || '';
+const OSS_ACCESS_KEY_SECRET = process.env.OSS_ACCESS_KEY_SECRET || '';
+const OSS_CUSTOM_DOMAIN = process.env.OSS_CUSTOM_DOMAIN || '';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const APP_PASSWORD = process.env.APP_PASSWORD || '';
+const SPACE_ID = process.env.SPACE_ID || DEFAULT_SPACE_ID;
+const SPACE_LABEL = process.env.SPACE_LABEL || DEFAULT_SPACE_LABEL;
+
+function sanitizeKeySegment(value) {
+  return String(value || DEFAULT_SPACE_ID).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+const SPACE_PREFIX = sanitizeKeySegment(SPACE_ID);
 
 const app = express();
 app.use(express.json());
@@ -42,117 +62,87 @@ app.use(cors({
   },
 }));
 
-// helper for OSS client and backup prefix
 function getOSSClient() {
   return new OSS({
-    region: process.env.OSS_REGION || 'oss-cn-shenzhen',
-    bucket: process.env.OSS_BUCKET || 'love-timeline',
-    accessKeyId: process.env.OSS_ACCESS_KEY_ID || '',
-    accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || '',
+    region: OSS_REGION,
+    bucket: OSS_BUCKET,
+    accessKeyId: OSS_ACCESS_KEY_ID,
+    accessKeySecret: OSS_ACCESS_KEY_SECRET,
   });
 }
 
-function getUserPrefix(username) {
-  return username.replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-
-function getBackupKey(username, id) {
-  const userPrefix = getUserPrefix(username);
-  return `backups/${userPrefix}/${id}.json`;
-}
-
-// Users storage
-const USERS_STORAGE = process.env.USERS_STORAGE || 'local';
-const USERS_KEY = process.env.USERS_KEY || 'system/users.json';
-const DATA_DIR = process.env.DATA_DIR || __dirname;
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-
-if (USERS_STORAGE === 'local' && !fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-async function loadUsers() {
-  if (USERS_STORAGE === 'oss') {
-    try {
-      const result = await getOSSClient().get(USERS_KEY);
-      return JSON.parse(result.content.toString('utf8')) || {};
-    } catch (error) {
-      if (error.name === 'NoSuchKeyError' || error.code === 'NoSuchKey') {
-        return {};
-      }
-      throw error;
-    }
-  }
-
-  if (!fs.existsSync(USERS_FILE)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) || {};
-  } catch (e) {
-    return {};
+function requireOSSConfig() {
+  if (!OSS_ACCESS_KEY_ID || !OSS_ACCESS_KEY_SECRET) {
+    throw new Error('OSS credentials are not configured');
   }
 }
 
-async function saveUsers(users) {
-  if (USERS_STORAGE === 'oss') {
-    await getOSSClient().put(
-      USERS_KEY,
-      Buffer.from(JSON.stringify(users, null, 2), 'utf8'),
-      { headers: { 'Content-Type': 'application/json' } },
-    );
-    return;
-  }
-
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+function getBackupKey(id) {
+  return `backups/${SPACE_PREFIX}/${id}.json`;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
-const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS) || 10;
+function getSyncKey() {
+  return `sync/${SPACE_PREFIX}/latest.json`;
+}
+
+function getScopedPrefix(prefix = 'photos') {
+  return `${SPACE_PREFIX}/${prefix}`;
+}
 
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Missing auth' });
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing auth' });
+  }
+
   const token = auth.slice(7);
   try {
     const payload = jwt.verify(token, JWT_SECRET);
+    if (payload.spaceId !== SPACE_PREFIX) {
+      return res.status(401).json({ error: 'Invalid space token' });
+    }
     req.user = payload;
     next();
-  } catch (err) {
+  } catch (error) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'love-timeline-api', timestamp: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: 'love-timeline-api',
+    spaceId: SPACE_PREFIX,
+    timestamp: new Date().toISOString(),
+  });
 });
 
-app.post('/api/register', async (req, res) => {
-  try {
-    const { username, password } = req.body || {};
-    if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
-    const users = await loadUsers();
-    if (users[username]) return res.status(409).json({ error: 'Username exists' });
-    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    users[username] = { username, hash, createdAt: Date.now() };
-    await saveUsers(users);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.post('/api/register', (req, res) => {
+  res.status(410).json({ error: 'Registration is disabled for this shared space' });
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', (req, res) => {
   try {
-    const { username, password } = req.body || {};
-    if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
-    const users = await loadUsers();
-    const u = users[username];
-    if (!u) return res.status(401).json({ error: 'Invalid credentials' });
-    const ok = await bcrypt.compare(password, u.hash);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, username });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const { password } = req.body || {};
+    if (!APP_PASSWORD) {
+      return res.status(500).json({ error: 'APP_PASSWORD is not configured' });
+    }
+    if (!password) {
+      return res.status(400).json({ error: 'Missing password' });
+    }
+    if (password !== APP_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    const token = jwt.sign({ spaceId: SPACE_PREFIX }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({
+      token,
+      username: SPACE_LABEL,
+      spaceId: SPACE_PREFIX,
+      spaceLabel: SPACE_LABEL,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -166,21 +156,13 @@ function urlEncode(str) {
 }
 
 function buildPresignedUploadUrl({ fileName, contentType, prefix = 'photos' }) {
-  const region = process.env.OSS_REGION || 'oss-cn-shenzhen';
-  const bucket = process.env.OSS_BUCKET || 'love-timeline';
-  const accessKeyId = process.env.OSS_ACCESS_KEY_ID || '';
-  const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET || '';
-  const customDomain = process.env.OSS_CUSTOM_DOMAIN || '';
+  requireOSSConfig();
 
-  if (!accessKeyId || !accessKeySecret) {
-    throw new Error('OSS 凭证未配置，请在环境变量中设置 OSS_ACCESS_KEY_ID 和 OSS_ACCESS_KEY_SECRET');
-  }
-
-  const ext = fileName.split('.').pop().toLowerCase();
+  const ext = (fileName.split('.').pop() || 'bin').toLowerCase();
   const uuid = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
   const key = `${prefix}/${uuid}.${ext}`;
   const expires = Math.floor(Date.now() / 1000) + 300;
-  const resource = `/${bucket}/${key}`;
+  const resource = `/${OSS_BUCKET}/${key}`;
 
   const stringToSign = [
     'PUT',
@@ -191,19 +173,19 @@ function buildPresignedUploadUrl({ fileName, contentType, prefix = 'photos' }) {
     resource,
   ].join('\n');
 
-  const signature = createHmac('sha1', accessKeySecret)
+  const signature = createHmac('sha1', OSS_ACCESS_KEY_SECRET)
     .update(stringToSign)
     .digest('base64');
   const encodedSig = urlEncode(signature);
 
-  const uploadUrl = `https://${bucket}.${region}.aliyuncs.com/${key}`
-    + `?OSSAccessKeyId=${accessKeyId}`
+  const uploadUrl = `https://${OSS_BUCKET}.${OSS_REGION}.aliyuncs.com/${key}`
+    + `?OSSAccessKeyId=${OSS_ACCESS_KEY_ID}`
     + `&Expires=${expires}`
     + `&Signature=${encodedSig}`;
 
-  const publicUrl = customDomain
-    ? `https://${customDomain}/${key}`
-    : `https://${bucket}.${region}.aliyuncs.com/${key}`;
+  const publicUrl = OSS_CUSTOM_DOMAIN
+    ? `https://${OSS_CUSTOM_DOMAIN}/${key}`
+    : `https://${OSS_BUCKET}.${OSS_REGION}.aliyuncs.com/${key}`;
 
   return { uploadUrl, publicUrl, key };
 }
@@ -211,15 +193,15 @@ function buildPresignedUploadUrl({ fileName, contentType, prefix = 'photos' }) {
 app.post('/api/oss-token', authMiddleware, (req, res) => {
   try {
     const { fileName, contentType, prefix = 'photos' } = req.body || {};
-
     if (!fileName || !contentType) {
-      res.status(400).json({ error: 'Missing fileName or contentType' });
-      return;
+      return res.status(400).json({ error: 'Missing fileName or contentType' });
     }
 
-    const userPrefix = req.user.username.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const combinedPrefix = `${userPrefix}/${prefix}`;
-    const result = buildPresignedUploadUrl({ fileName, contentType, prefix: combinedPrefix });
+    const result = buildPresignedUploadUrl({
+      fileName,
+      contentType,
+      prefix: getScopedPrefix(prefix),
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -228,25 +210,18 @@ app.post('/api/oss-token', authMiddleware, (req, res) => {
 
 app.post('/api/oss-delete', authMiddleware, async (req, res) => {
   try {
+    requireOSSConfig();
     const { keys = [] } = req.body || {};
     if (!Array.isArray(keys) || keys.length === 0) {
-      res.json({ ok: true });
-      return;
+      return res.json({ ok: true });
     }
 
-    const userPrefix = req.user.username.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const invalidKey = keys.find((key) => typeof key !== 'string' || !key.startsWith(`${userPrefix}/`));
+    const invalidKey = keys.find((key) => typeof key !== 'string' || !key.startsWith(`${SPACE_PREFIX}/`));
     if (invalidKey) {
-      return res.status(403).json({ error: 'Cannot delete keys outside your user namespace' });
+      return res.status(403).json({ error: 'Cannot delete keys outside the shared space' });
     }
 
-    const client = new OSS({
-      region: process.env.OSS_REGION || 'oss-cn-shenzhen',
-      bucket: process.env.OSS_BUCKET || 'love-timeline',
-      accessKeyId: process.env.OSS_ACCESS_KEY_ID || '',
-      accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || '',
-    });
-
+    const client = getOSSClient();
     await Promise.all(keys.map((key) => client.delete(key)));
     res.json({ ok: true });
   } catch (error) {
@@ -254,123 +229,142 @@ app.post('/api/oss-delete', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/backup  -- store encrypted backup blob (JSON { name, data })
 app.post('/api/backup', authMiddleware, async (req, res) => {
   try {
+    requireOSSConfig();
     const { name, data } = req.body || {};
-    if (!data) return res.status(400).json({ error: 'Missing data' });
+    if (!data) {
+      return res.status(400).json({ error: 'Missing data' });
+    }
 
     const id = Date.now().toString(36) + '-' + randomBytes(6).toString('hex');
-    const key = getBackupKey(req.user.username, id);
+    const key = getBackupKey(id);
     const client = getOSSClient();
-    const body = JSON.stringify({ name: name || '', data, username: req.user.username });
+    const body = JSON.stringify({
+      name: name || SPACE_LABEL,
+      data,
+      spaceId: SPACE_PREFIX,
+    });
 
-    await client.put(key, Buffer.from(body, 'utf8'), { headers: { 'Content-Type': 'application/json' } });
+    await client.put(key, Buffer.from(body, 'utf8'), {
+      headers: { 'Content-Type': 'application/json' },
+    });
     res.json({ id });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// GET /api/backup/:id -- retrieve backup blob
 app.get('/api/backup/:id', authMiddleware, async (req, res) => {
   try {
-    const id = req.params.id;
-    const key = getBackupKey(req.user.username, id);
+    requireOSSConfig();
+    const key = getBackupKey(req.params.id);
     const client = getOSSClient();
     const result = await client.get(key);
     const parsed = JSON.parse(result.content.toString('utf8'));
-    if (parsed.username !== req.user.username) return res.status(403).json({ error: 'Forbidden' });
+
+    if (parsed.spaceId !== SPACE_PREFIX) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     res.json(parsed);
-  } catch (err) {
-    if (err.name === 'NoSuchKeyError' || err.code === 'NoSuchKey') {
+  } catch (error) {
+    if (error.name === 'NoSuchKeyError' || error.code === 'NoSuchKey') {
       return res.status(404).json({ error: 'Not found' });
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// List user's backups
 app.get('/api/backups', authMiddleware, async (req, res) => {
   try {
-    const userPrefix = getUserPrefix(req.user.username);
+    requireOSSConfig();
     const client = getOSSClient();
-    const listRes = await client.list({ prefix: `backups/${userPrefix}/` });
+    const prefix = `backups/${SPACE_PREFIX}/`;
+    const listRes = await client.list({ prefix });
     const objects = listRes.objects || [];
-    const list = objects.map((obj) => {
-      const id = obj.name.replace(`backups/${userPrefix}/`, '').replace(/\.json$/, '');
-      return {
-        id,
-        name: obj.name,
-        createdAt: new Date(obj.lastModified).getTime(),
-      };
-    });
+    const list = objects.map((obj) => ({
+      id: obj.name.replace(prefix, '').replace(/\.json$/, ''),
+      name: obj.name,
+      createdAt: new Date(obj.lastModified).getTime(),
+    }));
     res.json({ list });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.delete('/api/backup/:id', authMiddleware, async (req, res) => {
   try {
-    const id = req.params.id;
-    const key = getBackupKey(req.user.username, id);
+    requireOSSConfig();
     const client = getOSSClient();
-    await client.delete(key);
+    await client.delete(getBackupKey(req.params.id));
     res.json({ ok: true });
-  } catch (err) {
-    if (err.name === 'NoSuchKeyError' || err.code === 'NoSuchKey') {
+  } catch (error) {
+    if (error.name === 'NoSuchKeyError' || error.code === 'NoSuchKey') {
       return res.status(404).json({ error: 'Not found' });
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/sync', authMiddleware, async (req, res) => {
   try {
+    requireOSSConfig();
     const { data } = req.body || {};
-    if (!data) return res.status(400).json({ error: 'Missing data' });
+    if (!data) {
+      return res.status(400).json({ error: 'Missing data' });
+    }
 
-    const userPrefix = getUserPrefix(req.user.username);
-    const key = `sync/${userPrefix}/latest.json`;
-    const client = getOSSClient();
-    const payload = JSON.stringify({ data, updatedAt: new Date().toISOString(), username: req.user.username });
+    const key = getSyncKey();
+    const updatedAt = new Date().toISOString();
+    const payload = JSON.stringify({
+      data,
+      updatedAt,
+      spaceId: SPACE_PREFIX,
+    });
 
-    await client.put(key, Buffer.from(payload, 'utf8'), { headers: { 'Content-Type': 'application/json' } });
-    res.json({ ok: true, updatedAt: new Date().toISOString() });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    await getOSSClient().put(key, Buffer.from(payload, 'utf8'), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    res.json({ ok: true, updatedAt });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/api/sync', authMiddleware, async (req, res) => {
   try {
-    const userPrefix = getUserPrefix(req.user.username);
-    const key = `sync/${userPrefix}/latest.json`;
-    const client = getOSSClient();
-    const result = await client.get(key);
+    requireOSSConfig();
+    const result = await getOSSClient().get(getSyncKey());
     const parsed = JSON.parse(result.content.toString('utf8'));
-    if (parsed.username !== req.user.username) return res.status(403).json({ error: 'Forbidden' });
+
+    if (parsed.spaceId !== SPACE_PREFIX) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     res.json({ data: parsed.data, updatedAt: parsed.updatedAt });
-  } catch (err) {
-    if (err.name === 'NoSuchKeyError' || err.code === 'NoSuchKey') {
+  } catch (error) {
+    if (error.name === 'NoSuchKeyError' || error.code === 'NoSuchKey') {
       return res.status(404).json({ error: 'Not found' });
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/api/sync/info', authMiddleware, async (req, res) => {
   try {
-    const userPrefix = getUserPrefix(req.user.username);
-    const key = `sync/${userPrefix}/latest.json`;
+    requireOSSConfig();
     const client = getOSSClient();
+    const key = getSyncKey();
     const listRes = await client.list({ prefix: key });
     const obj = (listRes.objects || [])[0];
-    if (!obj) return res.json({ exists: false });
+    if (!obj) {
+      return res.json({ exists: false });
+    }
     res.json({ exists: true, updatedAt: obj.lastModified });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
