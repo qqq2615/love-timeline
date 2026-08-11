@@ -110,9 +110,15 @@ export async function deleteMemory(id) {
 
 // ========== 导入导出 ==========
 
+export async function getAllRawMemories() {
+  const db = await openDB();
+  const store = tx(db, 'memories');
+  return promisify(store.getAll());
+}
+
 export async function exportAllData() {
   const settings = await loadSettings();
-  const memories = await getAllMemories();
+  const memories = await getAllRawMemories();
   return { settings, memories };
 }
 

@@ -3,8 +3,10 @@
  * 优先使用 OSS；如果不可用则自动回退到本地 IndexedDB，确保手机端可独立使用。
  */
 import { generatePresignedUrl } from './oss-signer';
+import { getUsername } from './auth';
 import { saveBlob, deleteBlob } from './db';
 import { generateId } from './dateUtils';
+import { API_BASE } from './config';
 
 export async function uploadToOSS(blob, fileName, prefix = 'photos', onProgress) {
   try {
@@ -17,7 +19,9 @@ export async function uploadToOSS(blob, fileName, prefix = 'photos', onProgress)
     return { url: publicUrl, key, storageMode: 'remote' };
   } catch (error) {
     const ext = fileName.split('.').pop() || 'bin';
-    const localKey = `${prefix}/${generateId()}.${ext}`;
+    const user = getUsername();
+    const localPrefix = user ? `${user.replace(/[^a-zA-Z0-9_-]/g, '_')}/${prefix}` : prefix;
+    const localKey = `${localPrefix}/${generateId()}.${ext}`;
     let localUrl;
     try {
       await saveBlob(localKey, blob);
@@ -54,7 +58,7 @@ export async function deleteFromOSS(keys) {
   await Promise.all(localKeys.map((key) => deleteBlob(key)));
 
   try {
-    const response = await fetch('/api/oss-delete', {
+    const response = await fetch(`${API_BASE}/api/oss-delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keys: localKeys }),

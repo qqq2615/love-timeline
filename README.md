@@ -1,16 +1,74 @@
-# React + Vite
+# love-timeline
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A React + Vite timeline app with self-hosted user login, cloud-synced encrypted backups, and Aliyun OSS media support.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- User registration and login via backend JWT auth
+- Aliyun OSS signed uploads for user-specific media
+- Encrypted cloud backup storage per user
+- Cross-device sync using OSS and server-side sync metadata
+- Local IndexedDB storage fallback for offline use
+- PWA-ready frontend with service worker support
 
-## React Compiler
+## Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Install dependencies:
 
-## Expanding the Oxlint configuration
+```bash
+npm install
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+2. Copy the environment example and configure your OSS credentials and backend secret:
+
+```bash
+cp .env.example .env
+```
+
+3. Edit `.env` and set:
+
+- `OSS_REGION`
+- `OSS_BUCKET`
+- `OSS_ACCESS_KEY_ID`
+- `OSS_ACCESS_KEY_SECRET`
+- `JWT_SECRET`
+- optional: `OSS_CUSTOM_DOMAIN`, `BCRYPT_ROUNDS`
+
+## Development
+
+The app uses a Node backend at `server.js` for auth, signing, and cloud sync.
+
+Start the backend server:
+
+```bash
+npm run dev:server
+```
+
+Then start the frontend:
+
+```bash
+npm run dev
+```
+
+The Vite dev server proxies `/api` requests to the backend.
+
+## Production
+
+Build the frontend and run the server:
+
+```bash
+npm run build
+npm start
+```
+
+The server serves the static `dist` files in production.
+
+## Notes
+
+- The backend stores user credentials in `users.json` with bcrypt hashing.
+- Cloud backups and sync files are stored under user-specific OSS prefixes.
+- Encryption keys for uploaded backups are derived from the user-provided password and username.
+
+## Environment variables
+
+See `.env.example` for the required OSS and authentication settings.

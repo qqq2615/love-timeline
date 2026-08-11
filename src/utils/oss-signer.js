@@ -3,12 +3,15 @@
  * 前端只负责请求服务端签名，不再把 OSS Secret 暴露给浏览器。
  */
 
+import { API_BASE } from './config';
+
 export async function generatePresignedUrl(fileName, contentType, prefix = 'photos') {
-  const response = await fetch('/api/oss-token', {
+  const token = localStorage.getItem('love-timeline-jwt');
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(`${API_BASE}/api/oss-token`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({ fileName, contentType, prefix }),
   });
 

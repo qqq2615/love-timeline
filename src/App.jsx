@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { loadSettings, getAllMemories, deleteMemory } from './utils/db';
 import { deleteFromOSS } from './utils/uploader';
-import LockScreen from './components/LockScreen';
+import { getToken } from './utils/auth';
+import { resolveSyncConflict } from './utils/sync';
 import SetupPage from './components/SetupPage';
 import Header from './components/Header';
 import Timeline from './components/Timeline';
@@ -11,7 +12,6 @@ import EditEntry from './components/EditEntry';
 import './App.css';
 
 export default function App() {
-  const [locked, setLocked] = useState(() => !localStorage.getItem('love-timeline-unlocked'));
   const [settings, setSettings] = useState(null);
   const [memories, setMemories] = useState([]);
   const [mediaModal, setMediaModal] = useState(null);
@@ -32,6 +32,12 @@ export default function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!loading) {
+      syncNow();
+    }
+  }, [loading, syncNow]);
+
   const refreshData = useCallback(async () => {
     const s = await loadSettings();
     setSettings(s);
@@ -39,22 +45,56 @@ export default function App() {
     setMemories(m);
   }, []);
 
+  const syncTimerRef = useRef(null);
+  const syncInProgressRef = useRef(false);
+
+  const syncNow = useCallback(async () => {
+    if (!getToken()) return;
+    if (syncInProgressRef.current) return;
+    syncInProgressRef.current = true;
+    try {
+      const result = await resolveSyncConflict();
+      if (result?.resolved === 'downloaded') {
+        await refreshData();
+      }
+    } catch (err) {
+      console.warn('自动同步失败：', err);
+    } finally {
+      syncInProgressRef.current = false;
+    }
+  }, [refreshData]);
+
+  const scheduleAutoSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      syncNow();
+    }, 1200);
+  }, [syncNow]);
+
+  const handleAuthSuccess = useCallback(async () => {
+    await syncNow();
+  }, [syncNow]);
+
   const handleSetupComplete = useCallback((newSettings) => {
     setSettings(newSettings);
     setMemories([]);
-  }, []);
+    scheduleAutoSync();
+  }, [scheduleAutoSync]);
 
   const handleDataImported = useCallback(async (data) => {
     await refreshData();
-  }, [refreshData]);
+    scheduleAutoSync();
+  }, [refreshData, scheduleAutoSync]);
 
   const handleMemoryAdded = useCallback(() => {
     refreshData();
-  }, [refreshData]);
+    scheduleAutoSync();
+  }, [refreshData, scheduleAutoSync]);
 
   const handleMemoryUpdated = useCallback(() => {
     refreshData();
-  }, [refreshData]);
+    scheduleAutoSync();
+  }, [refreshData, scheduleAutoSync]);
 
   const handleDelete = useCallback(async (memory) => {
     const keys = [memory?.storageKey, memory?.thumbKey].filter(Boolean);
@@ -63,7 +103,8 @@ export default function App() {
     }
     await deleteMemory(memory.id);
     refreshData();
-  }, [refreshData]);
+    scheduleAutoSync();
+  }, [refreshData, scheduleAutoSync]);
 
   const handleMediaClick = useCallback((memory) => {
     setMediaModal(memory);
@@ -81,11 +122,8 @@ export default function App() {
   const handleAnniversaryUpdated = useCallback(async () => {
     await refreshData();
     setShowAnniversaryEditor(false);
-  }, [refreshData]);
-
-  if (locked) {
-    return <LockScreen onUnlock={() => setLocked(false)} />;
-  }
+    scheduleAutoSync();
+  }, [refreshData, scheduleAutoSync]);
 
   if (loading) {
     return (
@@ -110,6 +148,7 @@ export default function App() {
         coverUrl={settings.coverUrl}
         onDataImported={handleDataImported}
         onEditAnniversary={handleEditAnniversary}
+        onAuthenticated={handleAuthSuccess}
       />
       <main className="main">
         <Timeline

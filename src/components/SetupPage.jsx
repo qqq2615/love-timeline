@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { loadSettings, saveSettings } from '../utils/db';
-import { compressImage } from '../utils/media';
 import { uploadToOSS } from '../utils/uploader';
 import { daysBetween } from '../utils/dateUtils';
 
@@ -9,6 +8,7 @@ export default function SetupPage({ onComplete, editing = false, initialData = n
   const fileRef = useRef(null);
   const [date, setDate] = useState(initialData?.anniversary || '');
   const [coverUrl, setCoverUrl] = useState(initialData?.coverUrl || '');
+  const [formError, setFormError] = useState('');
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -53,7 +53,8 @@ export default function SetupPage({ onComplete, editing = false, initialData = n
 
   const handleSubmit = async () => {
     if (!date) return;
-    await saveSettings({ anniversary: date, coverUrl });
+    const newSettings = { anniversary: date, coverUrl };
+    await saveSettings(newSettings);
     const s = await loadSettings();
     onComplete(s);
   };
@@ -102,6 +103,8 @@ export default function SetupPage({ onComplete, editing = false, initialData = n
         <div className="setup-form">
           <label className="setup-label">📅 我们在一起的那一天</label>
           <input type="date" className="setup-input" value={date} onChange={handleDateChange} max={today} />
+
+          {formError && <p className="form-error">{formError}</p>}
 
           {preview !== null && preview >= 0 && (
             <div className="setup-preview">
