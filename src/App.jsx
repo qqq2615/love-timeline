@@ -32,12 +32,6 @@ export default function App() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (!loading) {
-      syncNow();
-    }
-  }, [loading, syncNow]);
-
   const refreshData = useCallback(async () => {
     const s = await loadSettings();
     setSettings(s);
@@ -63,6 +57,12 @@ export default function App() {
       syncInProgressRef.current = false;
     }
   }, [refreshData]);
+
+  useEffect(() => {
+    if (!loading) {
+      syncNow();
+    }
+  }, [loading, syncNow]);
 
   const scheduleAutoSync = useCallback(() => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
