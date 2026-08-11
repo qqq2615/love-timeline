@@ -63,6 +63,31 @@ npm start
 
 The server serves the static `dist` files in production.
 
+## Deploying the backend (Render / Heroku / VPS / Docker)
+
+This project includes a simple `server.js` that must be deployed to a public host for login, OSS signing and sync features to work. Two quick options:
+
+- Heroku (quick):
+	1. Create a new app on Heroku.
+	2. Add environment variables in the Heroku Dashboard: `OSS_REGION`, `OSS_BUCKET`, `OSS_ACCESS_KEY_ID`, `OSS_ACCESS_KEY_SECRET`, `JWT_SECRET`.
+	3. Push this repository to Heroku or connect GitHub and enable automatic deploys. Heroku will use the `Procfile`.
+
+- Render (recommended for simplicity):
+	1. Create a new Web Service on Render and connect your GitHub repo.
+	2. Set the build command to `npm ci && npm run build` and start command to `npm start`.
+	3. Add the same environment variables in the Render service settings.
+
+Alternatively you can build a Docker image and deploy it to any container host using the included `Dockerfile`.
+
+After the backend is live at `https://api.yourdomain.com`, rebuild and redeploy the frontend with `VITE_API_BASE` set:
+
+```bash
+VITE_API_BASE=https://api.yourdomain.com npm run build
+npm run deploy
+```
+
+This will update the GitHub Pages site to point to your running backend so login, cloud backup and sync work correctly.
+
 ## Notes
 
 - The backend stores user credentials in `users.json` with bcrypt hashing.
