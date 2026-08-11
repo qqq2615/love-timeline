@@ -1244,3 +1244,81 @@ button {
     width: 42%;
   }
 }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(61, 44, 51, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 460px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(180, 120, 140, 0.28);
+  padding: 32px 28px;
+}
+
+.auth-page {
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+}
+
+.auth-card-full {
+  max-width: 460px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(180, 120, 140, 0.3);
+  padding: 40px 32px;
+  text-align: center;
+  animation: fadeInUp 0.8s ease;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-switch-btn,
+.auth-cancel-btn {
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.auth-switch-btn {
+  background: rgba(255, 154, 158, 0.12);
+  color: var(--rose-dark);
+}
+
+.auth-switch-btn:hover {
+  background: rgba(255, 154, 158, 0.18);
+}
+
+.auth-cancel-btn {
+  background: transparent;
+  color: var(--text-light);
+}
+
+.auth-cancel-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

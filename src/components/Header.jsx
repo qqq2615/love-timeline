@@ -6,7 +6,7 @@ import { getUsername, logout } from '../utils/auth';
 import Auth from './Auth';
 import BackupManager from './BackupManager';
 
-export default function Header({ anniversary, coverUrl, onDataImported, onEditAnniversary, onAuthenticated }) {
+export default function Header({ anniversary, coverUrl, onDataImported, onEditAnniversary, onAuthenticated, onLoggedOut }) {
   const [days, setDays] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -120,6 +120,7 @@ export default function Header({ anniversary, coverUrl, onDataImported, onEditAn
   const handleLogout = () => {
     logout();
     setUsername(null);
+    if (onLoggedOut) onLoggedOut();
     alert('已退出登录');
   };
 

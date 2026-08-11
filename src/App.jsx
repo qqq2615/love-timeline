@@ -3,6 +3,7 @@ import { loadSettings, getAllMemories, deleteMemory } from './utils/db';
 import { deleteFromOSS } from './utils/uploader';
 import { getToken } from './utils/auth';
 import { resolveSyncConflict } from './utils/sync';
+import Auth from './components/Auth';
 import SetupPage from './components/SetupPage';
 import Header from './components/Header';
 import Timeline from './components/Timeline';
@@ -17,26 +18,26 @@ export default function App() {
   const [mediaModal, setMediaModal] = useState(null);
   const [editEntry, setEditEntry] = useState(null);
   const [showAnniversaryEditor, setShowAnniversaryEditor] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getToken());
   const [loading, setLoading] = useState(true);
 
-  // 初始化加载
   useEffect(() => {
     (async () => {
-      const s = await loadSettings();
-      if (s?.anniversary) {
-        setSettings(s);
-        const m = await getAllMemories();
-        setMemories(m);
+      const currentSettings = await loadSettings();
+      if (currentSettings?.anniversary) {
+        setSettings(currentSettings);
+        const currentMemories = await getAllMemories();
+        setMemories(currentMemories);
       }
       setLoading(false);
     })();
   }, []);
 
   const refreshData = useCallback(async () => {
-    const s = await loadSettings();
-    setSettings(s);
-    const m = await getAllMemories();
-    setMemories(m);
+    const currentSettings = await loadSettings();
+    setSettings(currentSettings);
+    const currentMemories = await getAllMemories();
+    setMemories(currentMemories);
   }, []);
 
   const syncTimerRef = useRef(null);
@@ -45,14 +46,15 @@ export default function App() {
   const syncNow = useCallback(async () => {
     if (!getToken()) return;
     if (syncInProgressRef.current) return;
+
     syncInProgressRef.current = true;
     try {
       const result = await resolveSyncConflict();
       if (result?.resolved === 'downloaded') {
         await refreshData();
       }
-    } catch (err) {
-      console.warn('自动同步失败：', err);
+    } catch (error) {
+      console.warn('Auto sync failed:', error);
     } finally {
       syncInProgressRef.current = false;
     }
@@ -72,8 +74,13 @@ export default function App() {
   }, [syncNow]);
 
   const handleAuthSuccess = useCallback(async () => {
+    setIsAuthenticated(true);
     await syncNow();
   }, [syncNow]);
+
+  const handleLoggedOut = useCallback(() => {
+    setIsAuthenticated(false);
+  }, []);
 
   const handleSetupComplete = useCallback((newSettings) => {
     setSettings(newSettings);
@@ -81,7 +88,7 @@ export default function App() {
     scheduleAutoSync();
   }, [scheduleAutoSync]);
 
-  const handleDataImported = useCallback(async (data) => {
+  const handleDataImported = useCallback(async () => {
     await refreshData();
     scheduleAutoSync();
   }, [refreshData, scheduleAutoSync]);
@@ -115,8 +122,8 @@ export default function App() {
   }, []);
 
   const handleEditAnniversary = useCallback(async () => {
-    const s = await loadSettings();
-    setShowAnniversaryEditor(s || { anniversary: '', coverUrl: '' });
+    const currentSettings = await loadSettings();
+    setShowAnniversaryEditor(currentSettings || { anniversary: '', coverUrl: '' });
   }, []);
 
   const handleAnniversaryUpdated = useCallback(async () => {
@@ -136,7 +143,10 @@ export default function App() {
     );
   }
 
-  // 首次使用
+  if (!isAuthenticated) {
+    return <Auth fullScreen={true} onAuthenticated={handleAuthSuccess} />;
+  }
+
   if (!settings || !settings.anniversary) {
     return <SetupPage onComplete={handleSetupComplete} />;
   }
@@ -149,6 +159,7 @@ export default function App() {
         onDataImported={handleDataImported}
         onEditAnniversary={handleEditAnniversary}
         onAuthenticated={handleAuthSuccess}
+        onLoggedOut={handleLoggedOut}
       />
       <main className="main">
         <Timeline
@@ -159,10 +170,7 @@ export default function App() {
           onDelete={handleDelete}
         />
       </main>
-      <AddMemory
-        anniversary={settings.anniversary}
-        onAdded={handleMemoryAdded}
-      />
+      <AddMemory anniversary={settings.anniversary} onAdded={handleMemoryAdded} />
 
       {mediaModal && (
         <MediaModal memory={mediaModal} onClose={() => setMediaModal(null)} />
