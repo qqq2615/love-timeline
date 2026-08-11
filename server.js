@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHmac, randomBytes } from 'crypto';
@@ -15,6 +16,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
+// Allow CORS from configured origin (use '*' for public access or set CORS_ORIGIN)
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 
 // helper for OSS client and backup prefix
 function getOSSClient() {
