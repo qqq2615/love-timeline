@@ -16,8 +16,31 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
-// Allow CORS from configured origin (use '*' for public access or set CORS_ORIGIN)
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+
+function parseCorsOrigins(value) {
+  if (!value || value.trim() === '*') return '*';
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const allowedOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins === '*') {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+}));
 
 // helper for OSS client and backup prefix
 function getOSSClient() {
@@ -39,7 +62,13 @@ function getBackupKey(username, id) {
 }
 
 // Users storage
-const USERS_FILE = path.join(__dirname, 'users.json');
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 function loadUsers() {
   if (!fs.existsSync(USERS_FILE)) return {};
   try {
@@ -67,6 +96,10 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, service: 'love-timeline-api', timestamp: new Date().toISOString() });
+});
 
 app.post('/api/register', async (req, res) => {
   try {
@@ -317,14 +350,20 @@ app.get('/api/sync/info', authMiddleware, async (req, res) => {
   }
 });
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+const distDir = path.join(__dirname, 'dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(distDir, 'index.html'));
   });
 }
 
 const port = Number(process.env.PORT) || 3000;
-app.listen(port, '0.0.0.0', () => {
-  console.log(`OSS upload server listening on http://0.0.0.0:${port}`);
+const host = process.env.HOST || '0.0.0.0';
+app.listen(port, host, () => {
+  console.log(`OSS upload server listening on http://${host}:${port}`);
 });
