@@ -44,7 +44,7 @@ export async function downloadSyncData() {
 }
 
 export async function uploadSyncData(data) {
-  const res = await fetch('/api/sync', {
+  const res = await fetch(`${API_BASE}/api/sync`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ data }),
