@@ -5,7 +5,15 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 function toBase64(buf) {
-  const bin = String.fromCharCode(...new Uint8Array(buf));
+  const bytes = new Uint8Array(buf);
+  const chunkSize = 0x8000;
+  let bin = '';
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    bin += String.fromCharCode(...chunk);
+  }
+
   return btoa(bin);
 }
 
