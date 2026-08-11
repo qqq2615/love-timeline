@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listBackups, downloadAndDecryptBackup, deleteBackup } from '../utils/backup';
 import { importAllData } from '../utils/db';
-import { getToken } from '../utils/auth';
+import { getLoginPassword, getToken } from '../utils/auth';
 
 function fmtDate(ms) {
   try {
@@ -33,9 +33,9 @@ export default function BackupManager({ onClose, onRestored }) {
   }, []);
 
   const handleRestore = async (id) => {
-    const password = prompt('请输入备份口令：', '');
+    const password = getLoginPassword();
     if (!password) {
-      alert('需要输入备份口令才能解密备份');
+      alert('当前浏览器没有保存登录密码，请先退出后重新登录一次，再恢复云备份。');
       return;
     }
 

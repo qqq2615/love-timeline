@@ -4,6 +4,7 @@ const TOKEN_KEY = 'love-timeline-jwt';
 const USERNAME_KEY = 'love-timeline-username';
 const SPACE_ID_KEY = 'love-timeline-space-id';
 const SPACE_LABEL_KEY = 'love-timeline-space-label';
+const LOGIN_PASSWORD_KEY = 'love-timeline-login-password';
 
 export async function register() {
   throw new Error('当前站点已改为共享空间模式，不再支持单独注册账号');
@@ -34,6 +35,10 @@ export async function login(usernameOrPassword, maybePassword) {
     localStorage.setItem(SPACE_LABEL_KEY, payload.spaceLabel || payload.username);
   }
 
+  if (password) {
+    sessionStorage.setItem(LOGIN_PASSWORD_KEY, password);
+  }
+
   return payload;
 }
 
@@ -42,6 +47,7 @@ export function logout() {
   localStorage.removeItem(USERNAME_KEY);
   localStorage.removeItem(SPACE_ID_KEY);
   localStorage.removeItem(SPACE_LABEL_KEY);
+  sessionStorage.removeItem(LOGIN_PASSWORD_KEY);
 }
 
 export function getToken() {
@@ -60,6 +66,10 @@ export function getSpaceLabel() {
   return localStorage.getItem(SPACE_LABEL_KEY) || localStorage.getItem(USERNAME_KEY);
 }
 
+export function getLoginPassword() {
+  return sessionStorage.getItem(LOGIN_PASSWORD_KEY) || '';
+}
+
 export default {
   register,
   login,
@@ -68,4 +78,5 @@ export default {
   getUsername,
   getSpaceId,
   getSpaceLabel,
+  getLoginPassword,
 };

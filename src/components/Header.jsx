@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { daysBetween, formatDateShort } from '../utils/dateUtils';
 import { exportAllData, importAllData, downloadJSON, readJSONFile, clearAllData } from '../utils/db';
 import { uploadEncryptedBackup, downloadAndDecryptBackup, listBackups } from '../utils/backup';
-import { getSpaceLabel, getToken, logout } from '../utils/auth';
+import { getLoginPassword, getSpaceLabel, getToken, logout } from '../utils/auth';
 import Auth from './Auth';
 import BackupManager from './BackupManager';
 
@@ -76,19 +76,29 @@ export default function Header({
     return true;
   };
 
+  const requireBackupPassword = () => {
+    const password = getLoginPassword();
+    if (!password) {
+      alert('当前浏览器没有保存登录密码，请先退出后重新登录一次，再使用云备份。');
+      setShowMenu(false);
+      return null;
+    }
+    return password;
+  };
+
   const handleCloudUpload = async () => {
     setShowMenu(false);
     if (!requireLogin()) {
       return;
     }
 
+    const password = requireBackupPassword();
+    if (!password) {
+      return;
+    }
+
     try {
       const data = await exportAllData();
-      const password = prompt('请输入这次云备份使用的备份口令：', '');
-      if (!password) {
-        alert('需要输入备份口令才能加密备份');
-        return;
-      }
       const id = await uploadEncryptedBackup(data, password);
       prompt('备份已上传，请保存这个备份 ID，换设备恢复时会用到：', id);
     } catch (error) {
@@ -102,14 +112,14 @@ export default function Header({
       return;
     }
 
+    const password = requireBackupPassword();
+    if (!password) {
+      return;
+    }
+
     try {
       const id = prompt('请输入备份 ID：', '');
       if (!id) {
-        return;
-      }
-      const password = prompt('请输入备份口令：', '');
-      if (!password) {
-        alert('需要输入备份口令才能解密备份');
         return;
       }
 
@@ -133,6 +143,11 @@ export default function Header({
       return;
     }
 
+    const password = requireBackupPassword();
+    if (!password) {
+      return;
+    }
+
     try {
       const backupList = await listBackups();
       if (!backupList || backupList.length === 0) {
@@ -143,12 +158,6 @@ export default function Header({
       const latest = backupList.sort((a, b) => b.createdAt - a.createdAt)[0];
       if (!latest) {
         alert('未找到最新备份');
-        return;
-      }
-
-      const password = prompt(`请输入用于解密备份 ${latest.name || latest.id} 的备份口令：`, '');
-      if (!password) {
-        alert('需要输入备份口令才能解密备份');
         return;
       }
 
