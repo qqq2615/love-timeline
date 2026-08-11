@@ -17,6 +17,11 @@ const DEFAULT_OSS_REGION = 'oss-cn-shenzhen';
 const DEFAULT_OSS_BUCKET = 'love-timeline';
 const DEFAULT_SPACE_ID = 'our-love-space';
 const DEFAULT_SPACE_LABEL = 'Our Love Space';
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://qqq2615.github.io',
+];
 
 const OSS_REGION = process.env.OSS_REGION || DEFAULT_OSS_REGION;
 const OSS_BUCKET = process.env.OSS_BUCKET || DEFAULT_OSS_BUCKET;
@@ -38,7 +43,8 @@ const app = express();
 app.use(express.json());
 
 function parseCorsOrigins(value) {
-  if (!value || value.trim() === '*') return '*';
+  if (!value) return DEFAULT_CORS_ORIGINS;
+  if (value.trim() === '*') return '*';
   return value
     .split(',')
     .map((item) => item.trim())
