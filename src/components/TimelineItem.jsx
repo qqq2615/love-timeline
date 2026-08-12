@@ -7,6 +7,7 @@ export default function TimelineItem({ memory, index, onMediaClick, onEdit, onDe
   const itemRef = useRef(null);
   const isLeft = index % 2 === 0;
   const isVideo = memory.type === 'video';
+  const hasMedia = Boolean(memory.thumbUrl || memory.url);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -43,29 +44,37 @@ export default function TimelineItem({ memory, index, onMediaClick, onEdit, onDe
       </div>
 
       <div className="timeline-card">
-        {/* 媒体区域 */}
-        <div className="card-photo" onClick={() => onMediaClick(memory)}>
-          <img
-            src={memory.thumbUrl || memory.url}
-            alt={memory.note || '回忆'}
-            loading="lazy"
-          />
-          <div className="card-photo-overlay">
-            <span>{isVideo ? '▶ 播放' : '🔍 查看'}</span>
-          </div>
-          {isVideo && (
-            <div className="video-play-badge">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                <polygon points="8,5 19,12 8,19" />
-              </svg>
-              {memory.duration && (
-                <span>{formatDuration(memory.duration)}</span>
+        <div className="card-photo" onClick={() => hasMedia && onMediaClick(memory)}>
+          {hasMedia ? (
+            <>
+              <img
+                src={memory.thumbUrl || memory.url}
+                alt={memory.note || '回忆'}
+                loading="lazy"
+              />
+              <div className="card-photo-overlay">
+                <span>{isVideo ? '▶ 播放' : '🔍 查看'}</span>
+              </div>
+              {isVideo && (
+                <div className="video-play-badge">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <polygon points="8,5 19,12 8,19" />
+                  </svg>
+                  {memory.duration && (
+                    <span>{formatDuration(memory.duration)}</span>
+                  )}
+                </div>
               )}
+            </>
+          ) : (
+            <div className="upload-placeholder">
+              <span className="upload-icon">{isVideo ? '🎞️' : '🖼️'}</span>
+              <p>这条回忆的媒体仅保存在原设备</p>
+              <p className="upload-hint">云备份已保留文字和日期，但图片/视频无法跨设备恢复</p>
             </div>
           )}
         </div>
 
-        {/* 天数徽章 */}
         {memory.daysSinceAnniversary != null && (
           <div className="card-days-badge">
             <span className="heart-icon">♥</span>
@@ -73,7 +82,6 @@ export default function TimelineItem({ memory, index, onMediaClick, onEdit, onDe
           </div>
         )}
 
-        {/* 备注 */}
         {memory.note && (
           <p className="card-note">{memory.note}</p>
         )}

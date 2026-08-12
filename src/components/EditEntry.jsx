@@ -19,14 +19,18 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
     }
   }, [memory, anniversary]);
 
-  const handleDateChange = (e) => {
-    const newDate = e.target.value;
+  const handleDateChange = (event) => {
+    const newDate = event.target.value;
     setDate(newDate);
     if (anniversary && newDate) setDaysValue(daysBetween(anniversary, newDate));
   };
 
   const handleSave = async () => {
-    if (!date) { setError('请设置日期'); return; }
+    if (!date) {
+      setError('请设置日期');
+      return;
+    }
+
     try {
       await updateMemory(memory.id, {
         date,
@@ -36,16 +40,17 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
       onUpdated?.();
       onClose();
     } catch (err) {
-      setError('保存失败: ' + err.message);
+      setError(`保存失败: ${err.message}`);
     }
   };
 
   if (!memory) return null;
   const isVideo = memory.type === 'video';
+  const hasMedia = Boolean(memory.thumbUrl || memory.url);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="edit-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="edit-panel" onClick={(event) => event.stopPropagation()}>
         <div className="add-panel-header">
           <h2>✎ 编辑回忆</h2>
           <button className="close-btn" onClick={onClose}>✕</button>
@@ -53,7 +58,12 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
 
         <div className="add-panel-body">
           <div className="edit-photo-preview">
-            {isVideo ? (
+            {!hasMedia ? (
+              <div className="upload-placeholder">
+                <span className="upload-icon">{isVideo ? '🎞️' : '🖼️'}</span>
+                <p>媒体仅保存在原设备</p>
+              </div>
+            ) : isVideo ? (
               <video src={memory.url} controls playsInline className="edit-video-preview" />
             ) : (
               <img src={memory.thumbUrl || memory.url} alt={memory.note || '回忆'} />
@@ -61,10 +71,16 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
           </div>
 
           <div className="form-group">
-            <label>📅 日期</label>
+            <label>📮 日期</label>
             {editingDate ? (
-              <input type="date" className="form-input" value={date} onChange={handleDateChange}
-                onBlur={() => setEditingDate(false)} autoFocus />
+              <input
+                type="date"
+                className="form-input"
+                value={date}
+                onChange={handleDateChange}
+                onBlur={() => setEditingDate(false)}
+                autoFocus
+              />
             ) : (
               <div className="date-display" onClick={() => setEditingDate(true)}>
                 <span>{date || '未设置'}</span>
@@ -78,8 +94,13 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
 
           <div className="form-group">
             <label>💬 备注</label>
-            <textarea className="form-textarea" value={note}
-              onChange={(e) => setNote(e.target.value)} rows={3} placeholder="记录这个瞬间的故事..." />
+            <textarea
+              className="form-textarea"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              placeholder="记录这个瞬间的故事..."
+            />
           </div>
 
           {error && <p className="form-error">{error}</p>}

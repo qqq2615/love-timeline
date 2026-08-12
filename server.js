@@ -89,6 +89,15 @@ function getBackupKey(id) {
   return `backups/${SPACE_PREFIX}/${id}.json`;
 }
 
+function normalizeBackupId(id) {
+  if (!id) return null;
+  const value = String(id).trim();
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(value)) {
+    throw new Error('Invalid backup id');
+  }
+  return value;
+}
+
 function getSyncKey() {
   return `sync/${SPACE_PREFIX}/latest.json`;
 }
@@ -240,12 +249,12 @@ app.post('/api/oss-delete', authMiddleware, async (req, res) => {
 app.post('/api/backup', authMiddleware, async (req, res) => {
   try {
     requireOSSConfig();
-    const { name, data } = req.body || {};
+    const { name, data, backupId } = req.body || {};
     if (!data) {
       return res.status(400).json({ error: 'Missing data' });
     }
 
-    const id = Date.now().toString(36) + '-' + randomBytes(6).toString('hex');
+    const id = normalizeBackupId(backupId) || (Date.now().toString(36) + '-' + randomBytes(6).toString('hex'));
     const key = getBackupKey(id);
     const client = getOSSClient();
     const body = JSON.stringify({

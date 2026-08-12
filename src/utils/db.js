@@ -122,6 +122,60 @@ export async function exportAllData() {
   return { settings, memories };
 }
 
+function isLocalOnlyUrl(value) {
+  return typeof value === 'string' && (value.startsWith('blob:') || value.startsWith('data:'));
+}
+
+function sanitizeSettingsForCloud(settings) {
+  if (!settings) return settings;
+
+  const next = { ...settings };
+  if (isLocalOnlyUrl(next.coverUrl)) {
+    next.coverUrl = '';
+    next.coverLocalOnly = true;
+  }
+
+  return next;
+}
+
+function sanitizeMemoryForCloud(memory) {
+  const next = { ...memory };
+  const localOnlyMedia =
+    next.storageMode === 'local'
+    || isLocalOnlyUrl(next.url)
+    || isLocalOnlyUrl(next.thumbUrl);
+
+  if (localOnlyMedia) {
+    next.url = '';
+    next.thumbUrl = '';
+    next.storageKey = null;
+    next.thumbKey = null;
+    next.mediaUnavailableInCloudBackup = true;
+  }
+
+  return next;
+}
+
+export async function exportCloudBackupData() {
+  const settings = sanitizeSettingsForCloud(await loadSettings());
+  const memories = (await getAllRawMemories()).map(sanitizeMemoryForCloud);
+  const excludedLocalMediaCount = memories.filter((memory) => memory.mediaUnavailableInCloudBackup).length;
+
+  return {
+    data: {
+      settings,
+      memories,
+      backupMeta: {
+        excludedLocalMediaCount,
+        generatedAt: new Date().toISOString(),
+      },
+    },
+    stats: {
+      excludedLocalMediaCount,
+    },
+  };
+}
+
 export async function importAllData(data) {
   const db = await openDB();
   if (data.settings) {

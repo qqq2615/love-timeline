@@ -74,6 +74,13 @@ function resolveLegacySalt(usernameOrPassword, maybePassword) {
   return typeof maybePassword === 'string' ? usernameOrPassword || '' : '';
 }
 
+function resolveBackupOptions(maybePassword, options) {
+  if (maybePassword && typeof maybePassword === 'object' && !Array.isArray(maybePassword)) {
+    return maybePassword;
+  }
+  return options || {};
+}
+
 async function readErrorMessage(response, fallback) {
   const contentType = response.headers.get('content-type') || '';
 
@@ -92,9 +99,10 @@ async function readErrorMessage(response, fallback) {
   return fallback;
 }
 
-export async function uploadEncryptedBackup(dataObj, usernameOrPassword, maybePassword) {
+export async function uploadEncryptedBackup(dataObj, usernameOrPassword, maybePassword, options) {
   const backupPassword = resolveBackupPassword(usernameOrPassword, maybePassword);
   const legacySalt = resolveLegacySalt(usernameOrPassword, maybePassword);
+  const backupOptions = resolveBackupOptions(maybePassword, options);
   const spaceId = getSpaceId() || '';
   const salt = spaceId || legacySalt;
 
@@ -109,6 +117,10 @@ export async function uploadEncryptedBackup(dataObj, usernameOrPassword, maybePa
     saltVersion: spaceId ? 'space-id' : 'legacy-user',
     spaceId,
   };
+
+  if (backupOptions.backupId) {
+    body.backupId = backupOptions.backupId;
+  }
 
   const res = await fetch(`${API_BASE}/api/backup`, {
     method: 'POST',

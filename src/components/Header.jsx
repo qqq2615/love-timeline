@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react';
 import { daysBetween, formatDateShort } from '../utils/dateUtils';
-import { exportAllData, importAllData, downloadJSON, readJSONFile, clearAllData } from '../utils/db';
+import {
+  exportAllData,
+  exportCloudBackupData,
+  importAllData,
+  downloadJSON,
+  readJSONFile,
+  clearAllData,
+} from '../utils/db';
 import { uploadEncryptedBackup, downloadAndDecryptBackup, listBackups } from '../utils/backup';
 import { getLoginPassword, getSpaceLabel, getToken, logout } from '../utils/auth';
 import Auth from './Auth';
 import BackupManager from './BackupManager';
+
+const DEFAULT_CLOUD_BACKUP_ID = 'latest';
 
 export default function Header({
   anniversary,
@@ -98,9 +107,15 @@ export default function Header({
     }
 
     try {
-      const data = await exportAllData();
-      const id = await uploadEncryptedBackup(data, password);
-      prompt('备份已上传，请保存这个备份 ID，换设备恢复时会用到：', id);
+      const { data, stats } = await exportCloudBackupData();
+      const id = await uploadEncryptedBackup(data, password, { backupId: DEFAULT_CLOUD_BACKUP_ID });
+
+      if (stats.excludedLocalMediaCount > 0) {
+        alert(`云备份已更新，固定备份 ID 为 ${id}。已自动跳过 ${stats.excludedLocalMediaCount} 条仅保存在本机的媒体内容，这些内容无法跨设备恢复。`);
+        return;
+      }
+
+      alert(`云备份已更新，固定备份 ID 为：${id}`);
     } catch (error) {
       alert(`上传失败：${error.message}`);
     }
@@ -118,11 +133,8 @@ export default function Header({
     }
 
     try {
-      const id = prompt('请输入备份 ID：', '');
-      if (!id) {
-        return;
-      }
-
+      const rawId = prompt('请输入备份 ID（留空默认使用 latest）：', DEFAULT_CLOUD_BACKUP_ID);
+      const id = (rawId || DEFAULT_CLOUD_BACKUP_ID).trim() || DEFAULT_CLOUD_BACKUP_ID;
       const data = await downloadAndDecryptBackup(id, password);
       if (!data) {
         alert('解密后没有拿到有效数据');
