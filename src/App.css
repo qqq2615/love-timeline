@@ -184,6 +184,79 @@ button {
   letter-spacing: 2px;
 }
 
+/* ========== 艺术字标题「翻开我们的回忆」 ========== */
+.artistic-title {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.artistic-char {
+  display: inline-block;
+  background: linear-gradient(
+    135deg,
+    #e8878b 0%,
+    #ff9a9e 20%,
+    #fecfef 40%,
+    #ff9a9e 60%,
+    #e8878b 80%,
+    #d4a5a5 100%
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* 流光动画 — 1.5s 周期，与心跳同步 */
+  animation: shimmerFlow 1.5s ease-in-out infinite, charFloat 1.5s ease-in-out infinite;
+}
+
+/* 每个字 staggered delay，让流光像波浪一样流过 */
+.artistic-char:nth-child(1) { animation-delay: 0s; }
+.artistic-char:nth-child(2) { animation-delay: 0.12s; }
+.artistic-char:nth-child(3) { animation-delay: 0.24s; }
+.artistic-char:nth-child(4) { animation-delay: 0.36s; }
+.artistic-char:nth-child(5) { animation-delay: 0.48s; }
+.artistic-char:nth-child(6) { animation-delay: 0.60s; }
+.artistic-char:nth-child(7) { animation-delay: 0.72s; }
+
+/* 流光：渐变位置移动 */
+@keyframes shimmerFlow {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  25% {
+    background-position: 100% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  75% {
+    background-position: 0% 100%;
+  }
+}
+
+/* 浮动：与心跳节奏呼应 — 心跳 scale(1.15) 时文字上浮 */
+@keyframes charFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  15% {
+    transform: translateY(-6px);
+  }
+  30% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(-3px);
+  }
+  60% {
+    transform: translateY(0);
+  }
+}
+
 .setup-desc {
   color: #9b8e93;
   font-size: 15px;

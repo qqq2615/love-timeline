@@ -93,19 +93,29 @@ export async function addMemory(memory) {
 
 export async function updateMemory(id, updates) {
   const db = await openDB();
-  const store = tx(db, 'memories', 'readwrite');
-  const existing = await promisify(store.get(id));
+
+  // 先用独立事务读取现有记录
+  const existing = await promisify(tx(db, 'memories').get(id));
   if (!existing) throw new Error('记录不存在');
-  return promisify(store.put({ ...existing, ...updates }));
+
+  // 再用新事务写入更新
+  const writeStore = tx(db, 'memories', 'readwrite');
+  return promisify(writeStore.put({ ...existing, ...updates }));
 }
 
 export async function deleteMemory(id) {
   const db = await openDB();
-  const store = tx(db, 'memories', 'readwrite');
-  const existing = await promisify(store.get(id));
+
+  // 用独立的事务读取 blob key，避免 get 完成后事务自动提交
+  const existing = await promisify(tx(db, 'memories').get(id));
+
+  // 清理关联的 blob 文件（各自独立事务）
   if (existing?.storageKey) await deleteBlob(existing.storageKey);
   if (existing?.thumbKey) await deleteBlob(existing.thumbKey);
-  return promisify(store.delete(id));
+
+  // 新事务执行删除
+  const writeStore = tx(db, 'memories', 'readwrite');
+  return promisify(writeStore.delete(id));
 }
 
 // ========== 导入导出 ==========
@@ -184,9 +194,8 @@ export async function importAllData(data) {
   }
   if (data.memories?.length) {
     const store = tx(db, 'memories', 'readwrite');
-    for (const m of data.memories) {
-      await promisify(store.put(m));
-    }
+    // 一次性发起所有 put 请求，避免逐条 await 导致事务自动提交
+    await Promise.all(data.memories.map((m) => promisify(store.put(m))));
   }
 }
 
@@ -211,9 +220,10 @@ async function readBlobData(blob) {
 }
 
 export async function saveBlob(id, blob) {
+  // 先读取 blob 数据，再开启事务，避免事务在读取期间自动提交
+  const data = await readBlobData(blob);
   const db = await openDB();
   const store = tx(db, 'blobs', 'readwrite');
-  const data = await readBlobData(blob);
   return promisify(store.put({ id, type: blob.type, data }));
 }
 

@@ -22,11 +22,15 @@ export default function Auth({ onClose, onAuthenticated, fullScreen = false }) {
     <div className={fullScreen ? 'auth-card auth-card-full' : 'modal-card auth-card'}>
       <div className="auth-header">
         <div className="setup-heart">💕</div>
-        <h1 className="setup-title">先登录，再开始记录</h1>
-        <p className="setup-desc">
-          这个站点现在使用共享空间模式。
-          输入你们约定好的空间密码后，就可以继续设置纪念日、上传照片和同步数据。
-        </p>
+        <h1 className="artistic-title">
+          <span className="artistic-char">翻</span>
+          <span className="artistic-char">开</span>
+          <span className="artistic-char">我</span>
+          <span className="artistic-char">们</span>
+          <span className="artistic-char">的</span>
+          <span className="artistic-char">回</span>
+          <span className="artistic-char">忆</span>
+        </h1>
       </div>
 
       <form className="auth-form" onSubmit={submit}>
