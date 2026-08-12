@@ -111,13 +111,9 @@ export async function resolveSyncConflict() {
   const remoteChanged = meta.lastRemoteUpdated && remoteUpdated > new Date(meta.lastRemoteUpdated).getTime();
 
   if (!meta.lastLocalHash && !meta.lastRemoteUpdated) {
-    const useRemote = confirm('检测到云端已有同步数据，是否优先恢复云端数据？取消则会将本地数据上传覆盖云端。');
-    if (useRemote) {
-      await pullRemoteData();
-      return { resolved: 'downloaded' };
-    }
-    await pushLocalData();
-    return { resolved: 'uploaded' };
+    // 新会话首次同步 — 静默从云端拉取，不弹窗
+    await pullRemoteData();
+    return { resolved: 'downloaded' };
   }
 
   if (localChanged && remoteChanged) {

@@ -399,13 +399,13 @@ app.get('/api/sync/info', authMiddleware, async (req, res) => {
     requireOSSConfig();
     const client = getOSSClient();
     const key = getSyncKey();
-    const listRes = await client.list({ prefix: key });
-    const obj = (listRes.objects || [])[0];
-    if (!obj) {
+    const result = await client.get(key);
+    const parsed = JSON.parse(result.content.toString('utf8'));
+    res.json({ exists: true, updatedAt: parsed.updatedAt });
+  } catch (error) {
+    if (error.name === 'NoSuchKeyError' || error.code === 'NoSuchKey') {
       return res.json({ exists: false });
     }
-    res.json({ exists: true, updatedAt: obj.lastModified });
-  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
