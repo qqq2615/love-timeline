@@ -17,6 +17,7 @@ const DEFAULT_OSS_REGION = 'oss-cn-shenzhen';
 const DEFAULT_OSS_BUCKET = 'love-timeline';
 const DEFAULT_SPACE_ID = 'our-love-space';
 const DEFAULT_SPACE_LABEL = 'Our Love Space';
+const DEFAULT_REQUEST_BODY_LIMIT = '25mb';
 const DEFAULT_CORS_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -32,6 +33,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const SPACE_ID = process.env.SPACE_ID || DEFAULT_SPACE_ID;
 const SPACE_LABEL = process.env.SPACE_LABEL || DEFAULT_SPACE_LABEL;
+const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || DEFAULT_REQUEST_BODY_LIMIT;
 
 function sanitizeKeySegment(value) {
   return String(value || DEFAULT_SPACE_ID).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -40,7 +42,6 @@ function sanitizeKeySegment(value) {
 const SPACE_PREFIX = sanitizeKeySegment(SPACE_ID);
 
 const app = express();
-app.use(express.json());
 
 function parseCorsOrigins(value) {
   if (!value) return DEFAULT_CORS_ORIGINS;
@@ -67,6 +68,7 @@ app.use(cors({
     callback(new Error(`CORS blocked for origin: ${origin}`));
   },
 }));
+app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 
 function getOSSClient() {
   return new OSS({
@@ -372,6 +374,22 @@ app.get('/api/sync/info', authMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+app.use((error, req, res, next) => {
+  if (error?.type === 'entity.too.large') {
+    res.status(413).json({
+      error: `Request body too large. Increase REQUEST_BODY_LIMIT or reduce backup size (current limit: ${REQUEST_BODY_LIMIT}).`,
+    });
+    return;
+  }
+
+  if (error?.message?.startsWith('CORS blocked for origin:')) {
+    res.status(403).json({ error: error.message });
+    return;
+  }
+
+  next(error);
 });
 
 const distDir = path.join(__dirname, 'dist');

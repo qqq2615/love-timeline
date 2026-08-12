@@ -74,6 +74,24 @@ function resolveLegacySalt(usernameOrPassword, maybePassword) {
   return typeof maybePassword === 'string' ? usernameOrPassword || '' : '';
 }
 
+async function readErrorMessage(response, fallback) {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    const json = await response.json().catch(() => null);
+    if (json?.error) {
+      return json.error;
+    }
+  } else {
+    const text = await response.text().catch(() => '');
+    if (text) {
+      return text;
+    }
+  }
+
+  return fallback;
+}
+
 export async function uploadEncryptedBackup(dataObj, usernameOrPassword, maybePassword) {
   const backupPassword = resolveBackupPassword(usernameOrPassword, maybePassword);
   const legacySalt = resolveLegacySalt(usernameOrPassword, maybePassword);
@@ -99,7 +117,7 @@ export async function uploadEncryptedBackup(dataObj, usernameOrPassword, maybePa
   });
 
   if (!res.ok) {
-    throw new Error('上传备份失败');
+    throw new Error(await readErrorMessage(res, '上传备份失败'));
   }
 
   const json = await res.json();
@@ -119,7 +137,7 @@ export async function downloadAndDecryptBackup(id, usernameOrPassword, maybePass
   });
 
   if (!res.ok) {
-    throw new Error('下载备份失败');
+    throw new Error(await readErrorMessage(res, '下载备份失败'));
   }
 
   const json = await res.json();
@@ -150,7 +168,7 @@ export async function listBackups() {
   });
 
   if (!res.ok) {
-    throw new Error('获取备份列表失败');
+    throw new Error(await readErrorMessage(res, '获取备份列表失败'));
   }
 
   const json = await res.json();
@@ -164,8 +182,7 @@ export async function deleteBackup(id) {
   });
 
   if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    throw new Error(json.error || '删除备份失败');
+    throw new Error(await readErrorMessage(res, '删除备份失败'));
   }
 
   return true;
