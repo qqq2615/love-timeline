@@ -1,7 +1,8 @@
 import { generatePresignedUrl } from './oss-signer';
-import { deleteBlob } from './db';
+import { getSpaceId, getToken, getUsername } from './auth';
+import { saveBlob, deleteBlob } from './db';
+import { generateId } from './dateUtils';
 import { API_BASE } from './config';
-import { getToken } from './auth';
 
 function buildUploadErrorMessage(error) {
   const message = error?.message || '';
@@ -32,8 +33,41 @@ export async function uploadToOSS(blob, fileName, prefix = 'photos', onProgress)
     await putWithProgress(uploadUrl, blob, onProgress);
     return { url: publicUrl, key, storageMode: 'remote' };
   } catch (error) {
-    throw new Error(buildUploadErrorMessage(error));
+    console.warn('Remote media upload failed, using local fallback:', error);
+
+    const ext = fileName.split('.').pop() || 'bin';
+    const scope = getSpaceId() || getUsername();
+    const localPrefix = scope
+      ? `${scope.replace(/[^a-zA-Z0-9_-]/g, '_')}/${prefix}`
+      : prefix;
+    const localKey = `${localPrefix}/${generateId()}.${ext}`;
+
+    try {
+      await saveBlob(localKey, blob);
+      return {
+        url: await blobToDataUrl(blob),
+        key: localKey,
+        storageMode: 'local',
+        uploadError: buildUploadErrorMessage(error),
+      };
+    } catch {
+      return {
+        url: await blobToDataUrl(blob),
+        key: null,
+        storageMode: 'local',
+        uploadError: buildUploadErrorMessage(error),
+      };
+    }
   }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('读取本地文件失败'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 export async function deleteFromOSS(keys) {
@@ -41,10 +75,12 @@ export async function deleteFromOSS(keys) {
     return;
   }
 
-  const remoteKeys = keys.filter(Boolean);
-  if (remoteKeys.length === 0) {
+  const localKeys = keys.filter(Boolean);
+  if (localKeys.length === 0) {
     return;
   }
+
+  await Promise.all(localKeys.map((key) => deleteBlob(key).catch(() => undefined)));
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -56,7 +92,7 @@ export async function deleteFromOSS(keys) {
     const response = await fetch(`${API_BASE}/api/oss-delete`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ keys: remoteKeys }),
+      body: JSON.stringify({ keys: localKeys }),
     });
 
     const data = await response.json().catch(() => ({}));
@@ -64,7 +100,7 @@ export async function deleteFromOSS(keys) {
       throw new Error(data.error || '删除 OSS 文件失败');
     }
   } catch {
-    await Promise.all(remoteKeys.map((key) => deleteBlob(key).catch(() => undefined)));
+    // Local-only media or a temporary network failure must not block the main flow.
   }
 }
 
