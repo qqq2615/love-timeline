@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
 
 // 本地开发时内联 API 路由
 function apiMiddleware() {
@@ -95,14 +94,6 @@ export default defineConfig({
   plugins: [
     react(),
     apiMiddleware(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
-      manifest: false,
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
-      },
-    }),
   ],
   server: {
     host: '0.0.0.0',
