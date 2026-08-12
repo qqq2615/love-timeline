@@ -1,8 +1,25 @@
 import { generatePresignedUrl } from './oss-signer';
-import { getSpaceId, getToken, getUsername } from './auth';
-import { saveBlob, deleteBlob } from './db';
-import { generateId } from './dateUtils';
+import { deleteBlob } from './db';
 import { API_BASE } from './config';
+import { getToken } from './auth';
+
+function buildUploadErrorMessage(error) {
+  const message = error?.message || '';
+
+  if (message.includes('413')) {
+    return '文件过大，上传被服务器拒绝。请压缩后重试。';
+  }
+
+  if (message.includes('403')) {
+    return '上传凭证失效或 OSS 权限不足，请稍后重试。';
+  }
+
+  if (message.includes('Network') || message.includes('网络')) {
+    return '网络异常，媒体上传失败。';
+  }
+
+  return message || '媒体上传失败';
+}
 
 export async function uploadToOSS(blob, fileName, prefix = 'photos', onProgress) {
   try {
@@ -14,36 +31,9 @@ export async function uploadToOSS(blob, fileName, prefix = 'photos', onProgress)
 
     await putWithProgress(uploadUrl, blob, onProgress);
     return { url: publicUrl, key, storageMode: 'remote' };
-  } catch {
-    const ext = fileName.split('.').pop() || 'bin';
-    const scope = getSpaceId() || getUsername();
-    const localPrefix = scope ? `${scope.replace(/[^a-zA-Z0-9_-]/g, '_')}/${prefix}` : prefix;
-    const localKey = `${localPrefix}/${generateId()}.${ext}`;
-
-    try {
-      await saveBlob(localKey, blob);
-      return {
-        url: await blobToDataUrl(blob),
-        key: localKey,
-        storageMode: 'local',
-      };
-    } catch {
-      return {
-        url: await blobToDataUrl(blob),
-        key: null,
-        storageMode: 'local',
-      };
-    }
+  } catch (error) {
+    throw new Error(buildUploadErrorMessage(error));
   }
-}
-
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('读取本地文件失败'));
-    reader.readAsDataURL(blob);
-  });
 }
 
 export async function deleteFromOSS(keys) {
@@ -51,8 +41,10 @@ export async function deleteFromOSS(keys) {
     return;
   }
 
-  const localKeys = keys.filter(Boolean);
-  await Promise.all(localKeys.map((key) => deleteBlob(key)));
+  const remoteKeys = keys.filter(Boolean);
+  if (remoteKeys.length === 0) {
+    return;
+  }
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -64,7 +56,7 @@ export async function deleteFromOSS(keys) {
     const response = await fetch(`${API_BASE}/api/oss-delete`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ keys: localKeys }),
+      body: JSON.stringify({ keys: remoteKeys }),
     });
 
     const data = await response.json().catch(() => ({}));
@@ -72,7 +64,7 @@ export async function deleteFromOSS(keys) {
       throw new Error(data.error || '删除 OSS 文件失败');
     }
   } catch {
-    // 本地模式或网络异常时静默回退，避免影响主流程。
+    await Promise.all(remoteKeys.map((key) => deleteBlob(key).catch(() => undefined)));
   }
 }
 

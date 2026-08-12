@@ -108,14 +108,14 @@ export default function Header({
 
     try {
       const { data, stats } = await exportCloudBackupData();
-      const id = await uploadEncryptedBackup(data, password, { backupId: DEFAULT_CLOUD_BACKUP_ID });
+      await uploadEncryptedBackup(data, password, { backupId: DEFAULT_CLOUD_BACKUP_ID });
 
       if (stats.excludedLocalMediaCount > 0) {
-        alert(`云备份已更新，固定备份 ID 为 ${id}。已自动跳过 ${stats.excludedLocalMediaCount} 条仅保存在本机的媒体内容，这些内容无法跨设备恢复。`);
+        alert(`云备份成功。已自动跳过 ${stats.excludedLocalMediaCount} 条仅保存在本机的媒体内容，这些内容无法跨设备恢复。`);
         return;
       }
 
-      alert(`云备份已更新，固定备份 ID 为：${id}`);
+      alert('云备份成功');
     } catch (error) {
       alert(`上传失败：${error.message}`);
     }
@@ -133,17 +133,15 @@ export default function Header({
     }
 
     try {
-      const rawId = prompt('请输入备份 ID（留空默认使用 latest）：', DEFAULT_CLOUD_BACKUP_ID);
-      const id = (rawId || DEFAULT_CLOUD_BACKUP_ID).trim() || DEFAULT_CLOUD_BACKUP_ID;
-      const data = await downloadAndDecryptBackup(id, password);
+      const data = await downloadAndDecryptBackup(DEFAULT_CLOUD_BACKUP_ID, password);
       if (!data) {
-        alert('解密后没有拿到有效数据');
+        alert('恢复失败：没有拿到有效数据');
         return;
       }
 
       await importAllData(data);
       onDataImported(data);
-      alert('恢复完成');
+      alert('恢复成功');
     } catch (error) {
       alert(`恢复失败：${error.message}`);
     }
