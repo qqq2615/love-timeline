@@ -82,6 +82,7 @@ function uploadWithProgress(url, blob, token, onProgress) {
     xhr.open('POST', url);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
+    xhr.timeout = 300000; // 5 分钟，匹配后端 OSS 超时
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
         onProgress(Math.round((event.loaded / event.total) * 100));

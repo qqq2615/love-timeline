@@ -22,15 +22,7 @@ export default function Auth({ onClose, onAuthenticated, fullScreen = false }) {
     <div className={fullScreen ? 'auth-card auth-card-full' : 'modal-card auth-card'}>
       <div className="auth-header">
         <div className="setup-heart">💕</div>
-        <h1 className="artistic-title">
-          <span className="artistic-char">翻</span>
-          <span className="artistic-char">开</span>
-          <span className="artistic-char">我</span>
-          <span className="artistic-char">们</span>
-          <span className="artistic-char">的</span>
-          <span className="artistic-char">回</span>
-          <span className="artistic-char">忆</span>
-        </h1>
+        <h1 className="memory-title">翻开我们的回忆</h1>
       </div>
 
       <form className="auth-form" onSubmit={submit}>

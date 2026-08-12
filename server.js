@@ -78,6 +78,7 @@ function getOSSClient() {
     bucket: OSS_BUCKET,
     accessKeyId: OSS_ACCESS_KEY_ID,
     accessKeySecret: OSS_ACCESS_KEY_SECRET,
+    timeout: 300000, // 5 分钟，跨国上传大文件需要更长时间
   });
 }
 
