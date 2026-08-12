@@ -1333,3 +1333,36 @@ button {
 .auth-cancel-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
+
+/* ========== 自动备份 Toast ========== */
+.backup-toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 24px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  font-size: 14px;
+  color: #5c4b51;
+  box-shadow: 0 4px 20px rgba(180, 120, 130, 0.2);
+  z-index: 300;
+  animation: toastIn 0.3s ease;
+  white-space: nowrap;
+}
+
+.backup-toast-error {
+  color: #e8878b;
+  background: rgba(255, 245, 245, 0.98);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

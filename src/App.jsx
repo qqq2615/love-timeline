@@ -2,7 +2,10 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { loadSettings, getAllMemories, deleteMemory } from './utils/db';
 import { deleteFromOSS } from './utils/uploader';
 import { getToken } from './utils/auth';
+import { getLoginPassword } from './utils/auth';
 import { resolveSyncConflict } from './utils/sync';
+import { exportCloudBackupData } from './utils/db';
+import { uploadEncryptedBackup } from './utils/backup';
 import Auth from './components/Auth';
 import SetupPage from './components/SetupPage';
 import Header from './components/Header';
@@ -20,6 +23,9 @@ export default function App() {
   const [showAnniversaryEditor, setShowAnniversaryEditor] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!getToken());
   const [loading, setLoading] = useState(true);
+  const [backupStatus, setBackupStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
+  const backupTimerRef = useRef(null);
+  const backupMsgRef = useRef('');
 
   useEffect(() => {
     (async () => {
@@ -73,10 +79,36 @@ export default function App() {
     }, 1200);
   }, [syncNow]);
 
+  const autoBackupNow = useCallback(async () => {
+    const password = getLoginPassword();
+    if (!password) return; // 没密码就静默跳过
+
+    setBackupStatus('saving');
+    try {
+      const { data } = await exportCloudBackupData();
+      await uploadEncryptedBackup(data, password, { backupId: 'latest' });
+      setBackupStatus('saved');
+    } catch (err) {
+      backupMsgRef.current = err.message || '备份失败';
+      setBackupStatus('error');
+    }
+
+    // 3 秒后自动消失
+    setTimeout(() => setBackupStatus(null), 3000);
+  }, []);
+
+  const scheduleAutoBackup = useCallback(() => {
+    if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
+    backupTimerRef.current = setTimeout(() => {
+      autoBackupNow();
+    }, 2000);
+  }, [autoBackupNow]);
+
   const handleAuthSuccess = useCallback(async () => {
     setIsAuthenticated(true);
     await syncNow();
-  }, [syncNow]);
+    scheduleAutoBackup();
+  }, [syncNow, scheduleAutoBackup]);
 
   const handleLoggedOut = useCallback(() => {
     setIsAuthenticated(false);
@@ -86,22 +118,26 @@ export default function App() {
     setSettings(newSettings);
     setMemories([]);
     scheduleAutoSync();
-  }, [scheduleAutoSync]);
+    scheduleAutoBackup();
+  }, [scheduleAutoSync, scheduleAutoBackup]);
 
   const handleDataImported = useCallback(async () => {
     await refreshData();
     scheduleAutoSync();
-  }, [refreshData, scheduleAutoSync]);
+    scheduleAutoBackup();
+  }, [refreshData, scheduleAutoSync, scheduleAutoBackup]);
 
   const handleMemoryAdded = useCallback(() => {
     refreshData();
     scheduleAutoSync();
-  }, [refreshData, scheduleAutoSync]);
+    scheduleAutoBackup();
+  }, [refreshData, scheduleAutoSync, scheduleAutoBackup]);
 
   const handleMemoryUpdated = useCallback(() => {
     refreshData();
     scheduleAutoSync();
-  }, [refreshData, scheduleAutoSync]);
+    scheduleAutoBackup();
+  }, [refreshData, scheduleAutoSync, scheduleAutoBackup]);
 
   const handleDelete = useCallback(async (memory) => {
     const keys = [memory?.storageKey, memory?.thumbKey].filter(Boolean);
@@ -111,7 +147,8 @@ export default function App() {
     await deleteMemory(memory.id);
     refreshData();
     scheduleAutoSync();
-  }, [refreshData, scheduleAutoSync]);
+    scheduleAutoBackup();
+  }, [refreshData, scheduleAutoSync, scheduleAutoBackup]);
 
   const handleMediaClick = useCallback((memory) => {
     setMediaModal(memory);
@@ -130,7 +167,8 @@ export default function App() {
     await refreshData();
     setShowAnniversaryEditor(false);
     scheduleAutoSync();
-  }, [refreshData, scheduleAutoSync]);
+    scheduleAutoBackup();
+  }, [refreshData, scheduleAutoSync, scheduleAutoBackup]);
 
   if (loading) {
     return (
@@ -191,6 +229,14 @@ export default function App() {
           initialData={showAnniversaryEditor}
           onComplete={handleAnniversaryUpdated}
         />
+      )}
+
+      {backupStatus && (
+        <div className={`backup-toast ${backupStatus === 'error' ? 'backup-toast-error' : ''}`}>
+          {backupStatus === 'saving' && '☁️ 正在备份...'}
+          {backupStatus === 'saved' && '✅ 云备份成功'}
+          {backupStatus === 'error' && `❌ 备份失败：${backupMsgRef.current}`}
+        </div>
       )}
     </div>
   );
