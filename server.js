@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createHmac, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import OSS from 'ali-oss';
@@ -163,42 +163,18 @@ app.post('/api/login', (req, res) => {
   }
 });
 
-function urlEncode(str) {
-  return encodeURIComponent(str)
-    .replace(/!/g, '%21')
-    .replace(/'/g, '%27')
-    .replace(/\(/g, '%28')
-    .replace(/\)/g, '%29')
-    .replace(/\*/g, '%2A');
-}
-
 function buildPresignedUploadUrl({ fileName, contentType, prefix = 'photos' }) {
   requireOSSConfig();
 
   const ext = (fileName.split('.').pop() || 'bin').toLowerCase();
   const uuid = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
   const key = `${prefix}/${uuid}.${ext}`;
-  const expires = Math.floor(Date.now() / 1000) + 300;
-  const resource = `/${OSS_BUCKET}/${key}`;
-
-  const stringToSign = [
-    'PUT',
-    '',
-    contentType,
-    expires.toString(),
-    '',
-    resource,
-  ].join('\n');
-
-  const signature = createHmac('sha1', OSS_ACCESS_KEY_SECRET)
-    .update(stringToSign)
-    .digest('base64');
-  const encodedSig = urlEncode(signature);
-
-  const uploadUrl = `https://${OSS_BUCKET}.${OSS_REGION}.aliyuncs.com/${key}`
-    + `?OSSAccessKeyId=${OSS_ACCESS_KEY_ID}`
-    + `&Expires=${expires}`
-    + `&Signature=${encodedSig}`;
+  const client = getOSSClient();
+  const uploadUrl = client.signatureUrl(key, {
+    method: 'PUT',
+    'Content-Type': contentType,
+    expires: 300,
+  }).replace(/^http:/, 'https:');
 
   const publicUrl = OSS_CUSTOM_DOMAIN
     ? `https://${OSS_CUSTOM_DOMAIN}/${key}`
