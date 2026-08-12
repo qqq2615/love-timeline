@@ -81,9 +81,10 @@ export default function App() {
 
   const autoBackupNow = useCallback(async () => {
     const password = getLoginPassword();
-    if (!password) return; // 没密码就静默跳过
+    if (!password) return;
 
     setBackupStatus('saving');
+    let isError = false;
     try {
       const { data } = await exportCloudBackupData();
       await uploadEncryptedBackup(data, password, { backupId: 'latest' });
@@ -91,10 +92,11 @@ export default function App() {
     } catch (err) {
       backupMsgRef.current = err.message || '备份失败';
       setBackupStatus('error');
+      isError = true;
     }
 
-    // 3 秒后自动消失
-    setTimeout(() => setBackupStatus(null), 3000);
+    // 成功 4 秒消失，失败 8 秒（给你时间看清）
+    setTimeout(() => setBackupStatus(null), isError ? 8000 : 4000);
   }, []);
 
   const scheduleAutoBackup = useCallback(() => {
