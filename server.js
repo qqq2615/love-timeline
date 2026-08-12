@@ -18,6 +18,7 @@ const DEFAULT_OSS_BUCKET = 'love-timeline';
 const DEFAULT_SPACE_ID = 'our-love-space';
 const DEFAULT_SPACE_LABEL = 'Our Love Space';
 const DEFAULT_REQUEST_BODY_LIMIT = '25mb';
+const DEFAULT_MEDIA_UPLOAD_LIMIT = '220mb';
 const DEFAULT_CORS_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -34,6 +35,7 @@ const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const SPACE_ID = process.env.SPACE_ID || DEFAULT_SPACE_ID;
 const SPACE_LABEL = process.env.SPACE_LABEL || DEFAULT_SPACE_LABEL;
 const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || DEFAULT_REQUEST_BODY_LIMIT;
+const MEDIA_UPLOAD_LIMIT = process.env.MEDIA_UPLOAD_LIMIT || DEFAULT_MEDIA_UPLOAD_LIMIT;
 
 function sanitizeKeySegment(value) {
   return String(value || DEFAULT_SPACE_ID).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -104,6 +106,12 @@ function getSyncKey() {
 
 function getScopedPrefix(prefix = 'photos') {
   return `${SPACE_PREFIX}/${prefix}`;
+}
+
+function sanitizeObjectName(value, fallback = 'file.bin') {
+  const trimmed = String(value || '').trim();
+  const safe = trimmed.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return safe || fallback;
 }
 
 function authMiddleware(req, res, next) {
@@ -200,6 +208,46 @@ app.post('/api/oss-token', authMiddleware, (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.post(
+  '/api/media/upload',
+  authMiddleware,
+  express.raw({ type: '*/*', limit: MEDIA_UPLOAD_LIMIT }),
+  async (req, res) => {
+    try {
+      requireOSSConfig();
+
+      const prefix = getScopedPrefix(req.query.prefix || 'photos');
+      const fileName = sanitizeObjectName(req.query.fileName, 'file.bin');
+      const contentType = req.headers['content-type'] || 'application/octet-stream';
+      const body = req.body;
+
+      if (!body || !body.length) {
+        return res.status(400).json({ error: 'Missing file body' });
+      }
+
+      const ext = (fileName.split('.').pop() || 'bin').toLowerCase();
+      const uuid = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+      const key = `${prefix}/${uuid}.${ext}`;
+
+      await getOSSClient().put(key, body, {
+        headers: { 'Content-Type': contentType },
+      });
+
+      const publicUrl = OSS_CUSTOM_DOMAIN
+        ? `https://${OSS_CUSTOM_DOMAIN}/${key}`
+        : `https://${OSS_BUCKET}.${OSS_REGION}.aliyuncs.com/${key}`;
+
+      res.json({
+        ok: true,
+        key,
+        url: publicUrl,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 app.post('/api/oss-delete', authMiddleware, async (req, res) => {
   try {

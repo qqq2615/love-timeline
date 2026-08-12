@@ -1,7 +1,4 @@
-import { generatePresignedUrl } from './oss-signer';
-import { getSpaceId, getToken, getUsername } from './auth';
-import { saveBlob, deleteBlob } from './db';
-import { generateId } from './dateUtils';
+import { getToken } from './auth';
 import { API_BASE } from './config';
 
 function buildUploadErrorMessage(error) {
@@ -23,51 +20,28 @@ function buildUploadErrorMessage(error) {
 }
 
 export async function uploadToOSS(blob, fileName, prefix = 'photos', onProgress) {
+  const token = getToken();
+  if (!token) {
+    throw new Error('请先登录后再上传媒体');
+  }
+
+  const params = new URLSearchParams({
+    prefix,
+    fileName,
+  });
+
   try {
-    const { uploadUrl, publicUrl, key } = await generatePresignedUrl(
-      fileName,
-      blob.type || 'application/octet-stream',
-      prefix
+    const result = await uploadWithProgress(
+      `${API_BASE}/api/media/upload?${params.toString()}`,
+      blob,
+      token,
+      onProgress
     );
 
-    await putWithProgress(uploadUrl, blob, onProgress);
-    return { url: publicUrl, key, storageMode: 'remote' };
+    return { url: result.url, key: result.key, storageMode: 'remote' };
   } catch (error) {
-    console.warn('Remote media upload failed, using local fallback:', error);
-
-    const ext = fileName.split('.').pop() || 'bin';
-    const scope = getSpaceId() || getUsername();
-    const localPrefix = scope
-      ? `${scope.replace(/[^a-zA-Z0-9_-]/g, '_')}/${prefix}`
-      : prefix;
-    const localKey = `${localPrefix}/${generateId()}.${ext}`;
-
-    try {
-      await saveBlob(localKey, blob);
-      return {
-        url: await blobToDataUrl(blob),
-        key: localKey,
-        storageMode: 'local',
-        uploadError: buildUploadErrorMessage(error),
-      };
-    } catch {
-      return {
-        url: await blobToDataUrl(blob),
-        key: null,
-        storageMode: 'local',
-        uploadError: buildUploadErrorMessage(error),
-      };
-    }
+    throw new Error(buildUploadErrorMessage(error));
   }
-}
-
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('读取本地文件失败'));
-    reader.readAsDataURL(blob);
-  });
 }
 
 export async function deleteFromOSS(keys) {
@@ -75,12 +49,10 @@ export async function deleteFromOSS(keys) {
     return;
   }
 
-  const localKeys = keys.filter(Boolean);
-  if (localKeys.length === 0) {
+  const remoteKeys = keys.filter(Boolean);
+  if (remoteKeys.length === 0) {
     return;
   }
-
-  await Promise.all(localKeys.map((key) => deleteBlob(key).catch(() => undefined)));
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -92,22 +64,23 @@ export async function deleteFromOSS(keys) {
     const response = await fetch(`${API_BASE}/api/oss-delete`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ keys: localKeys }),
+      body: JSON.stringify({ keys: remoteKeys }),
     });
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(data.error || '删除 OSS 文件失败');
     }
-  } catch {
-    // Local-only media or a temporary network failure must not block the main flow.
+  } catch (error) {
+    console.warn('Failed to delete remote media:', error);
   }
 }
 
-function putWithProgress(url, blob, onProgress) {
+function uploadWithProgress(url, blob, token, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', url);
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
@@ -115,11 +88,19 @@ function putWithProgress(url, blob, onProgress) {
       }
     };
     xhr.onload = () => {
+      let data = {};
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+      } catch {
+        data = {};
+      }
+
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
+        resolve(data);
         return;
       }
-      reject(new Error(`上传失败: HTTP ${xhr.status}`));
+
+      reject(new Error(data.error || `上传失败: HTTP ${xhr.status}`));
     };
     xhr.onerror = () => reject(new Error('网络错误'));
     xhr.ontimeout = () => reject(new Error('上传超时'));
