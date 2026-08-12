@@ -24,15 +24,15 @@ export async function login(usernameOrPassword, maybePassword) {
   }
 
   const payload = await res.json();
-  localStorage.setItem(TOKEN_KEY, payload.token);
-  localStorage.setItem(USERNAME_KEY, payload.username || payload.spaceLabel || '');
+  sessionStorage.setItem(TOKEN_KEY, payload.token);
+  sessionStorage.setItem(USERNAME_KEY, payload.username || payload.spaceLabel || '');
 
   if (payload.spaceId) {
-    localStorage.setItem(SPACE_ID_KEY, payload.spaceId);
+    sessionStorage.setItem(SPACE_ID_KEY, payload.spaceId);
   }
 
   if (payload.spaceLabel || payload.username) {
-    localStorage.setItem(SPACE_LABEL_KEY, payload.spaceLabel || payload.username);
+    sessionStorage.setItem(SPACE_LABEL_KEY, payload.spaceLabel || payload.username);
   }
 
   if (password) {
@@ -43,27 +43,27 @@ export async function login(usernameOrPassword, maybePassword) {
 }
 
 export function logout() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USERNAME_KEY);
-  localStorage.removeItem(SPACE_ID_KEY);
-  localStorage.removeItem(SPACE_LABEL_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USERNAME_KEY);
+  sessionStorage.removeItem(SPACE_ID_KEY);
+  sessionStorage.removeItem(SPACE_LABEL_KEY);
   sessionStorage.removeItem(LOGIN_PASSWORD_KEY);
 }
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function getUsername() {
-  return localStorage.getItem(USERNAME_KEY) || localStorage.getItem(SPACE_LABEL_KEY);
+  return sessionStorage.getItem(USERNAME_KEY) || sessionStorage.getItem(SPACE_LABEL_KEY);
 }
 
 export function getSpaceId() {
-  return localStorage.getItem(SPACE_ID_KEY);
+  return sessionStorage.getItem(SPACE_ID_KEY);
 }
 
 export function getSpaceLabel() {
-  return localStorage.getItem(SPACE_LABEL_KEY) || localStorage.getItem(USERNAME_KEY);
+  return sessionStorage.getItem(SPACE_LABEL_KEY) || sessionStorage.getItem(USERNAME_KEY);
 }
 
 export function getLoginPassword() {

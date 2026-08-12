@@ -6,7 +6,7 @@
 import { API_BASE } from './config';
 
 export async function generatePresignedUrl(fileName, contentType, prefix = 'photos') {
-  const token = localStorage.getItem('love-timeline-jwt');
+  const token = sessionStorage.getItem('love-timeline-jwt');
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/api/oss-token`, {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { daysBetween, formatDateShort } from '../utils/dateUtils';
+import { daysBetween } from '../utils/dateUtils';
 import {
   exportAllData,
   exportCloudBackupData,
@@ -9,7 +9,7 @@ import {
   clearAllData,
 } from '../utils/db';
 import { uploadEncryptedBackup, downloadAndDecryptBackup, listBackups } from '../utils/backup';
-import { getLoginPassword, getSpaceLabel, getToken, logout } from '../utils/auth';
+import { getLoginPassword, getToken, logout } from '../utils/auth';
 import Auth from './Auth';
 import BackupManager from './BackupManager';
 
@@ -27,7 +27,6 @@ export default function Header({
   const [showMenu, setShowMenu] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showBackupManager, setShowBackupManager] = useState(false);
-  const [spaceLabel, setSpaceLabel] = useState(getSpaceLabel());
 
   useEffect(() => {
     if (!anniversary) {
@@ -182,7 +181,6 @@ export default function Header({
 
   const handleLogout = () => {
     logout();
-    setSpaceLabel(null);
     if (onLoggedOut) {
       onLoggedOut();
     }
@@ -190,7 +188,6 @@ export default function Header({
   };
 
   const handleAuthSuccess = () => {
-    setSpaceLabel(getSpaceLabel());
     setShowAuth(false);
     if (onAuthenticated) {
       onAuthenticated();
@@ -204,8 +201,6 @@ export default function Header({
       <div className="header-content">
         <div className="header-left">
           <h1 className="header-title">💕 恋爱时光轴</h1>
-          {anniversary && <p className="header-date">从 {formatDateShort(anniversary)} 开始</p>}
-          {spaceLabel && <p className="header-user">共享空间：{spaceLabel}</p>}
         </div>
 
         <div className="header-center">

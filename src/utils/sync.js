@@ -55,14 +55,14 @@ export async function uploadSyncData(data) {
 
 export function getSyncMeta() {
   try {
-    return JSON.parse(localStorage.getItem(metaKey) || '{}');
+    return JSON.parse(sessionStorage.getItem(metaKey) || '{}');
   } catch {
     return {};
   }
 }
 
 export function setSyncMeta(meta) {
-  localStorage.setItem(metaKey, JSON.stringify(meta));
+  sessionStorage.setItem(metaKey, JSON.stringify(meta));
 }
 
 export async function getSnapshotHash() {
