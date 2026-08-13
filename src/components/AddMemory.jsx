@@ -3,6 +3,7 @@ import { daysBetween, formatDate, generateId } from '../utils/dateUtils';
 import { addMemory } from '../utils/db';
 import { compressImage, createThumbnail, captureVideoFrame, extractPhotoDate, formatDuration } from '../utils/media';
 import { deleteFromOSS, uploadToOSS } from '../utils/uploader';
+import { ChatComposer } from './Chat';
 
 const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200MB
 
@@ -14,7 +15,7 @@ export default function AddMemory({ anniversary, onAdded }) {
   const [thumbnail, setThumbnail] = useState(null); // 缩略图 Blob
   const [photoDate, setPhotoDate] = useState('');
   const [daysValue, setDaysValue] = useState(null);
-  const [note, setNote] = useState('');
+  const [messages, setMessages] = useState([]);
   const [videoDuration, setVideoDuration] = useState(null);
   const [stage, setStage] = useState('idle'); // idle | processing | uploading | done | error
   const [progress, setProgress] = useState(0);
@@ -127,7 +128,8 @@ export default function AddMemory({ anniversary, onAdded }) {
         thumbKey: thumbResult.key,
         date: photoDate,
         daysSinceAnniversary: daysValue !== null ? daysValue : daysBetween(anniversary, photoDate),
-        note: note.trim(),
+        note: messages.map((m) => m.text).join('\n').trim(),
+        messages,
         duration: tab === 'video' ? videoDuration : undefined,
         createdAt: new Date().toISOString(),
       };
@@ -140,7 +142,7 @@ export default function AddMemory({ anniversary, onAdded }) {
       setThumbnail(null);
       setPhotoDate('');
       setDaysValue(null);
-      setNote('');
+      setMessages([]);
       setVideoDuration(null);
       setStage('done');
       setIsOpen(false);
@@ -166,7 +168,7 @@ export default function AddMemory({ anniversary, onAdded }) {
     setThumbnail(null);
     setPhotoDate('');
     setDaysValue(null);
-    setNote('');
+    setMessages([]);
     setVideoDuration(null);
     setStage('idle');
     setProgress(0);
@@ -182,7 +184,7 @@ export default function AddMemory({ anniversary, onAdded }) {
       setThumbnail(null);
       setPhotoDate('');
       setDaysValue(null);
-      setNote('');
+      setMessages([]);
       setVideoDuration(null);
       setError('');
       setStage('idle');
@@ -317,16 +319,10 @@ export default function AddMemory({ anniversary, onAdded }) {
                 )}
               </div>
 
-              {/* 备注 */}
+              {/* 两人聊天留言 */}
               <div className="form-group">
-                <label>💬 此刻心情 / 备注</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder="记录这个瞬间的故事..."
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  rows={3}
-                />
+                <label>💬 留言（💙 / 💗 分别代表两个人）</label>
+                <ChatComposer messages={messages} onChange={setMessages} />
               </div>
 
               {error && <p className="form-error">{error}</p>}

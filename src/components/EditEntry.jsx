@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { daysBetween } from '../utils/dateUtils';
 import { updateMemory } from '../utils/db';
+import { ChatComposer } from './Chat';
 
 export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
   const [date, setDate] = useState('');
-  const [note, setNote] = useState('');
+  const [messages, setMessages] = useState([]);
   const [daysValue, setDaysValue] = useState(null);
   const [editingDate, setEditingDate] = useState(false);
   const [error, setError] = useState('');
@@ -12,7 +13,13 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
   useEffect(() => {
     if (memory) {
       setDate(memory.date || '');
-      setNote(memory.note || '');
+      // 兼容旧数据：没有 messages 但有 note 时，把 note 当作第一条留言
+      const nextMessages = memory.messages?.length
+        ? memory.messages
+        : memory.note
+          ? [{ sender: 'a', text: memory.note }]
+          : [];
+      setMessages(nextMessages);
       if (memory.date && anniversary) {
         setDaysValue(daysBetween(anniversary, memory.date));
       }
@@ -35,7 +42,8 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
       await updateMemory(memory.id, {
         date,
         daysSinceAnniversary: daysValue,
-        note: note.trim(),
+        note: messages.map((m) => m.text).join('\n').trim(),
+        messages,
       });
       onUpdated?.();
       onClose();
@@ -93,14 +101,8 @@ export default function EditEntry({ memory, anniversary, onClose, onUpdated }) {
           </div>
 
           <div className="form-group">
-            <label>💬 备注</label>
-            <textarea
-              className="form-textarea"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              rows={3}
-              placeholder="记录这个瞬间的故事..."
-            />
+            <label>💬 留言（💙 / 💗 分别代表两个人）</label>
+            <ChatComposer messages={messages} onChange={setMessages} />
           </div>
 
           {error && <p className="form-error">{error}</p>}

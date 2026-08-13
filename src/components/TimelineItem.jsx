@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatDateShort } from '../utils/dateUtils';
 import { formatDuration } from '../utils/media';
+import { ChatBubbles } from './Chat';
 
 export default function TimelineItem({ memory, index, onMediaClick, onEdit, onDelete }) {
   const [visible, setVisible] = useState(false);
@@ -82,9 +83,11 @@ export default function TimelineItem({ memory, index, onMediaClick, onEdit, onDe
           </div>
         )}
 
-        {memory.note && (
+        {memory.messages && memory.messages.length > 0 ? (
+          <ChatBubbles messages={memory.messages} />
+        ) : memory.note ? (
           <p className="card-note">{memory.note}</p>
-        )}
+        ) : null}
 
         <div className="card-actions">
           <button className="action-btn" onClick={() => onEdit(memory)} title="编辑">
