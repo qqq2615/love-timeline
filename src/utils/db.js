@@ -188,6 +188,11 @@ export async function exportCloudBackupData() {
 
 export async function importAllData(data) {
   const db = await openDB();
+
+  // 清空现有 memories，再导入快照，确保「云端已删除的节点」在本地也被移除。
+  // 否则同步（pull）只会 put 快照里的节点，本地残留的旧记录会一直显示。
+  await promisify(tx(db, 'memories', 'readwrite').clear());
+
   if (data.settings) {
     const store = tx(db, 'settings', 'readwrite');
     await promisify(store.put({ id: 'main', ...data.settings }));
